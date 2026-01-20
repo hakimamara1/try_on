@@ -48,5 +48,5 @@ export const PRODUCTS = [
 
 export const REWARDS = {
     points: 120,
-    message: "You have 120 points – Invite friends & earn discounts"
+    message: "Invite friends & earn discounts"
 };
