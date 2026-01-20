@@ -128,17 +128,37 @@ exports.createProduct = async (req, res, next) => {
         console.log('req.file:', req.file);
 
         // Handle Image Upload
-        if (req.file) {
-            const result = await cloudinary.uploader.upload(req.file.path, {
-                folder: 'products'
-            });
+        if (req.files) {
+            // Handle single image (backward compatibility)
+            if (req.files.image) {
+                const file = req.files.image[0];
+                const result = await cloudinary.uploader.upload(file.path, {
+                    folder: 'products'
+                });
 
-            // Remove file from local
-            if (fs.existsSync(req.file.path)) {
-                fs.unlinkSync(req.file.path);
+                if (fs.existsSync(file.path)) {
+                    fs.unlinkSync(file.path);
+                }
+
+                req.body.image = result.secure_url;
             }
 
-            req.body.image = result.secure_url;
+            // Handle multiple images
+            if (req.files.images) {
+                const imageUrls = [];
+                for (const file of req.files.images) {
+                    const result = await cloudinary.uploader.upload(file.path, {
+                        folder: 'products'
+                    });
+
+                    if (fs.existsSync(file.path)) {
+                        fs.unlinkSync(file.path);
+                    }
+
+                    imageUrls.push(result.secure_url);
+                }
+                req.body.images = imageUrls;
+            }
         }
 
         const product = await Product.create(req.body);
@@ -168,17 +188,43 @@ exports.updateProduct = async (req, res, next) => {
         }
 
         // Handle Image Upload
-        if (req.file) {
-            const result = await cloudinary.uploader.upload(req.file.path, {
-                folder: 'products'
-            });
+        if (req.files) {
+            // Handle single image
+            if (req.files.image) {
+                const file = req.files.image[0];
+                const result = await cloudinary.uploader.upload(file.path, {
+                    folder: 'products'
+                });
 
-            // Remove file from local
-            if (fs.existsSync(req.file.path)) {
-                fs.unlinkSync(req.file.path);
+                if (fs.existsSync(file.path)) {
+                    fs.unlinkSync(file.path);
+                }
+
+                req.body.image = result.secure_url;
             }
 
-            req.body.image = result.secure_url;
+            // Handle multiple images
+            if (req.files.images) {
+                const imageUrls = [];
+                for (const file of req.files.images) {
+                    const result = await cloudinary.uploader.upload(file.path, {
+                        folder: 'products'
+                    });
+
+                    if (fs.existsSync(file.path)) {
+                        fs.unlinkSync(file.path);
+                    }
+
+                    imageUrls.push(result.secure_url);
+                }
+
+                if (!req.body.images) req.body.images = product.images || [];
+                // if images is coming as string or array in body? 
+                // req.body.images might be existing images URLs sent by client?
+                if (typeof req.body.images === 'string') req.body.images = [req.body.images];
+
+                req.body.images = [...req.body.images, ...imageUrls];
+            }
         }
 
         product = await Product.findByIdAndUpdate(req.params.id, req.body, {

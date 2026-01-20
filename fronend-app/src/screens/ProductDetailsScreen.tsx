@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Star, ShoppingCart, ArrowRight } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../constants/Styles';
 import { useCart } from '../context/CartContext';
 
@@ -14,6 +15,7 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
     const { product } = route.params || {};
     const [selectedSize, setSelectedSize] = useState('M');
     const [selectedColor, setSelectedColor] = useState(COLORS[0]);
+    const [activeSlide, setActiveSlide] = useState(0);
 
     const { addToCart } = useCart();
 
@@ -29,7 +31,42 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
             <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
                 {/* Gallery */}
                 <View style={styles.imageContainer}>
-                    <Image source={{ uri: product.image }} style={styles.image} />
+                    <ScrollView
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        onScroll={(e) => {
+                            const slide = Math.ceil(e.nativeEvent.contentOffset.x / e.nativeEvent.layoutMeasurement.width);
+                            if (slide !== activeSlide) {
+                                setActiveSlide(slide);
+                            }
+                        }}
+                        scrollEventThrottle={16}
+                    >
+                        {(product.images && product.images.length > 0 ? product.images : [product.image]).map((img: string, index: number) => (
+                            <Image
+                                key={index}
+                                source={{ uri: img }}
+                                style={styles.image}
+                            />
+                        ))}
+                    </ScrollView>
+                    <LinearGradient
+                        colors={['transparent', 'rgba(0,0,0,0.4)']}
+                        style={styles.paginationContainer}
+                    >
+                        <View style={styles.pagination}>
+                            {(product.images && product.images.length > 0 ? product.images : [product.image]).map((_: any, index: number) => (
+                                <View
+                                    key={index}
+                                    style={[
+                                        styles.paginationDot,
+                                        index === activeSlide ? styles.paginationDotActive : styles.paginationDotInactive
+                                    ]}
+                                />
+                            ))}
+                        </View>
+                    </LinearGradient>
                 </View>
 
                 {/* Info */}
@@ -137,9 +174,36 @@ const styles = StyleSheet.create({
         backgroundColor: '#eee',
     },
     image: {
-        width: '100%',
+        width: width,
         height: '100%',
         resizeMode: 'cover',
+    },
+    paginationContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 80,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    pagination: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+    },
+    paginationDot: {
+        height: 10,
+        borderRadius: 4,
+        backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    },
+    paginationDotActive: {
+        width: 24,
+        backgroundColor: '#fff',
+    },
+    paginationDotInactive: {
+        width: 8,
     },
     content: {
         padding: 24,

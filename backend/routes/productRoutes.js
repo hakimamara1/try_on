@@ -17,13 +17,13 @@ const upload = multer({ dest: 'uploads/' });
 
 router.route('/')
     .get(getProducts)
-    .post(protect, authorize('admin', 'staff'), upload.single('image'), createProduct);
+    .post(protect, authorize('admin', 'staff'), upload.fields([{ name: 'image', maxCount: 1 }, { name: 'images', maxCount: 10 }]), createProduct);
 
 router.route('/categories').get(getCategories);
 
 router.route('/:id')
     .get(getProduct)
-    .put(protect, authorize('admin', 'staff'), upload.single('image'), updateProduct)
+    .put(protect, authorize('admin', 'staff'), upload.fields([{ name: 'image', maxCount: 1 }, { name: 'images', maxCount: 10 }]), updateProduct)
     .delete(protect, authorize('admin', 'staff'), deleteProduct);
 
 module.exports = router;
