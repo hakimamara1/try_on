@@ -1,23 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Star, ShoppingCart, ArrowRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../constants/Styles';
+import { getProducts, getCategories, getProduct, getRelatedProducts } from '../api/products';
 import { useCart } from '../context/CartContext';
 
 const { width, height } = Dimensions.get('window');
 
-const SIZES = ['S', 'M', 'L', 'XL'];
-const COLORS = ['#DDA0DD', '#FFC1CC', '#000000', '#F5F5DC']; // Muted Rose, Pink, Black, Beige
-
 export default function ProductDetailsScreen({ route, navigation }: any) {
     const { product } = route.params || {};
-    const [selectedSize, setSelectedSize] = useState('M');
-    const [selectedColor, setSelectedColor] = useState(COLORS[0]);
+    const [selectedSize, setSelectedSize] = useState(product?.sizes?.[0] || '');
+    const [selectedColor, setSelectedColor] = useState(product?.colors?.[0] || '');
     const [activeSlide, setActiveSlide] = useState(0);
+    const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
 
     const { addToCart } = useCart();
+
+    useEffect(() => {
+        if (product?._id) {
+            fetchRelatedProducts();
+        }
+    }, [product?._id]);
+
+    const fetchRelatedProducts = async () => {
+        try {
+            const data = await getRelatedProducts(product._id);
+            setRelatedProducts(data.data || []);
+        } catch (error) {
+            console.error('Failed to fetch related products', error);
+        }
+    };
 
     const handleAddToCart = () => {
         addToCart(product, selectedSize, selectedColor);
@@ -87,50 +101,78 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
                     </View>
 
                     <Text style={styles.description}>
-                        Elevate your wardrobe with this stunning piece designed for the modern elegant woman.
-                        Crafted from high-quality fabrics offering both comfort and luxury.
+                        {product.description || "Elevate your wardrobe with this stunning piece designed for the modern elegant woman. Crafted from high-quality fabrics offering both comfort and luxury."}
                     </Text>
 
                     {/* Color Selector */}
                     <Text style={styles.sectionTitle}>Color</Text>
                     <View style={styles.selectorRow}>
-                        {COLORS.map((color, index) => (
-                            <TouchableOpacity
-                                key={index}
-                                style={[
-                                    styles.colorOption,
-                                    { backgroundColor: color },
-                                    selectedColor === color && styles.colorSelected
-                                ]}
-                                onPress={() => setSelectedColor(color)}
-                            />
-                        ))}
+                        {product.colors && product.colors.length > 0 ? (
+                            product.colors.map((color: string, index: number) => (
+                                <TouchableOpacity
+                                    key={index}
+                                    style={[
+                                        styles.colorOption,
+                                        { backgroundColor: color },
+                                        selectedColor === color && styles.colorSelected
+                                    ]}
+                                    onPress={() => setSelectedColor(color)}
+                                />
+                            ))
+                        ) : (
+                            <Text style={styles.description}>No colors available</Text>
+                        )}
                     </View>
 
                     {/* Size Selector */}
                     <Text style={styles.sectionTitle}>Size</Text>
                     <View style={styles.selectorRow}>
-                        {SIZES.map((size, index) => (
-                            <TouchableOpacity
-                                key={index}
-                                style={[
-                                    styles.sizeOption,
-                                    selectedSize === size && styles.sizeSelected
-                                ]}
-                                onPress={() => setSelectedSize(size)}
-                            >
-                                <Text style={[
-                                    styles.sizeText,
-                                    selectedSize === size && styles.sizeTextSelected
-                                ]}>{size}</Text>
-                            </TouchableOpacity>
-                        ))}
+                        {product.sizes && product.sizes.length > 0 ? (
+                            product.sizes.map((size: string, index: number) => (
+                                <TouchableOpacity
+                                    key={index}
+                                    style={[
+                                        styles.sizeOption,
+                                        selectedSize === size && styles.sizeSelected
+                                    ]}
+                                    onPress={() => setSelectedSize(size)}
+                                >
+                                    <Text style={[
+                                        styles.sizeText,
+                                        selectedSize === size && styles.sizeTextSelected
+                                    ]}>{size}</Text>
+                                </TouchableOpacity>
+                            ))
+                        ) : (
+                            <Text style={styles.description}>No sizes available</Text>
+                        )}
                     </View>
 
                     {/* Points Info */}
                     <View style={styles.pointsInfo}>
                         <Text style={styles.pointsText}>✨ Buy now and earn +20 points</Text>
                     </View>
+                    {/* Similar Products */}
+                    {relatedProducts.length > 0 && (
+                        <View style={styles.similarSection}>
+                            <Text style={styles.sectionTitle}>You might also like</Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+                                {relatedProducts.map((item) => (
+                                    <TouchableOpacity
+                                        key={item._id}
+                                        style={styles.similarCard}
+                                        onPress={() => navigation.push('ProductDetails', { product: item })}
+                                    >
+                                        <Image source={{ uri: item.image }} style={styles.similarImage} />
+                                        <View style={styles.similarInfo}>
+                                            <Text style={styles.similarTitle} numberOfLines={1}>{item.name}</Text>
+                                            <Text style={styles.similarPrice}>DA{item.price}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+                    )}
                 </View>
             </ScrollView>
 
@@ -320,6 +362,39 @@ const styles = StyleSheet.create({
         color: Colors.secondary,
         fontWeight: '600',
         textAlign: 'center',
+    },
+    similarSection: {
+        marginTop: 24,
+        marginBottom: 20,
+    },
+    similarCard: {
+        width: 140,
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    similarImage: {
+        width: '100%',
+        height: 140,
+        borderRadius: 8,
+        marginBottom: 8,
+    },
+    similarInfo: {
+        gap: 4,
+    },
+    similarTitle: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: Colors.text,
+    },
+    similarPrice: {
+        fontSize: 12,
+        color: Colors.textSecondary,
     },
     bottomBar: {
         position: 'absolute',

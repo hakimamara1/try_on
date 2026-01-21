@@ -6,7 +6,8 @@ const {
     getCategories,
     createProduct,
     updateProduct,
-    deleteProduct
+    deleteProduct,
+    getRelatedProducts
 } = require('../controllers/productController');
 
 const router = express.Router();
@@ -20,6 +21,7 @@ router.route('/')
     .post(protect, authorize('admin', 'staff'), upload.fields([{ name: 'image', maxCount: 1 }, { name: 'images', maxCount: 10 }]), createProduct);
 
 router.route('/categories').get(getCategories);
+router.route('/related/:id').get(getRelatedProducts);
 
 router.route('/:id')
     .get(getProduct)

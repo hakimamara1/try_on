@@ -117,6 +117,32 @@ exports.getCategories = async (req, res, next) => {
         next(err);
     }
 };
+// @desc      Get related products based on category
+// @route     GET /api/products/related/:id
+// @access    Public
+exports.getRelatedProducts = async (req, res, next) => {
+    try {
+        const product = await Product.findById(req.params.id);
+
+        if (!product) {
+            return res.status(404).json({ success: false, error: 'Product not found' });
+        }
+
+        // Find products with same category, exclude current product
+        const related = await Product.find({
+            category: product.category,
+            _id: { $ne: product._id }
+        }).limit(4);
+
+        res.status(200).json({
+            success: true,
+            data: related
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 // @desc      Create new product
 // @route     POST /api/products
 // @access    Private/Admin/Staff
