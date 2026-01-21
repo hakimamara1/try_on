@@ -46,6 +46,10 @@ const UserSchema = new mongoose.Schema({
         profileCompleted: { type: Boolean, default: false },
         firstTryOn: { type: Boolean, default: false }
     },
+    wishlist: [{
+        type: mongoose.Schema.ObjectId,
+        ref: 'Product'
+    }],
     createdAt: {
         type: Date,
         default: Date.now

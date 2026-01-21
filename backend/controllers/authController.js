@@ -88,12 +88,47 @@ exports.login = async (req, res, next) => {
     }
 };
 
+// @desc      Toggle product in wishlist
+// @route     PUT /api/auth/wishlist/:productId
+// @access    Private
+exports.toggleWishlist = async (req, res, next) => {
+    try {
+        const product = await require('../models/Product').findById(req.params.productId);
+
+        if (!product) {
+            return res.status(404).json({ success: false, error: 'Product not found' });
+        }
+
+        const user = await User.findById(req.user.id);
+
+        // Check if product is already in wishlist
+        const index = user.wishlist.indexOf(req.params.productId);
+
+        if (index > -1) {
+            // Remove
+            user.wishlist.splice(index, 1);
+        } else {
+            // Add
+            user.wishlist.push(req.params.productId);
+        }
+
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            data: user.wishlist
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 // @desc      Get current logged in user
 // @route     GET /api/auth/me
 // @access    Private
 exports.getMe = async (req, res, next) => {
     try {
-        const user = await User.findById(req.user.id);
+        const user = await User.findById(req.user.id).populate('wishlist');
 
         res.status(200).json({
             success: true,
