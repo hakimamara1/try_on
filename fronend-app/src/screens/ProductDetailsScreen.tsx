@@ -90,7 +90,7 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
 
     return (
         <View style={styles.container}>
-            <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
                 {/* Gallery */}
                 <View style={styles.imageContainer}>
                     <ScrollView
@@ -137,7 +137,7 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
                         <Text style={styles.title}>{product.name}</Text>
                         <TouchableOpacity onPress={handleToggleWishlist}>
                             <Heart
-                                size={24}
+                                size={27}
                                 color={Colors.primary}
                                 fill={isWishlisted ? Colors.primary : 'transparent'}
                             />
@@ -269,24 +269,35 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
                     </View>
 
                     {/* Similar Products */}
+                    {/* Similar Products */}
                     {relatedProducts.length > 0 && (
                         <View style={styles.similarSection}>
-                            <Text style={styles.sectionTitle}>You might also like</Text>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+                            <View style={styles.sectionTitleContainer}>
+                                <Text style={styles.sectionTitle}>Style Inspiration</Text>
+                            </View>
+                            <View style={styles.gridContainer}>
                                 {relatedProducts.map((item) => (
                                     <TouchableOpacity
                                         key={item._id}
                                         style={styles.similarCard}
                                         onPress={() => navigation.push('ProductDetails', { product: item })}
+                                        activeOpacity={0.9}
                                     >
                                         <Image source={{ uri: item.image }} style={styles.similarImage} />
-                                        <View style={styles.similarInfo}>
-                                            <Text style={styles.similarTitle} numberOfLines={1}>{item.name}</Text>
+                                        <View style={styles.similarInfoContainer}>
+                                            <View style={styles.similarInfo}>
+                                                <Text style={styles.similarTitle} numberOfLines={1}>{item.name}</Text>
+                                            </View>
                                             <Text style={styles.similarPrice}>DA{item.price}</Text>
+
+                                            <View style={styles.shopNowButton}>
+                                                <Text style={styles.shopNowText}>Shop Now</Text>
+                                                <ArrowRight size={14} color={Colors.textSecondary} />
+                                            </View>
                                         </View>
                                     </TouchableOpacity>
                                 ))}
-                            </ScrollView>
+                            </View>
                         </View>
                     )}
                 </View>
@@ -357,18 +368,18 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255, 255, 255, 0.5)',
     },
     paginationDotActive: {
-        width: 24,
+        width: 20,
         backgroundColor: '#fff',
     },
     paginationDotInactive: {
         width: 8,
     },
     content: {
-        padding: 24,
+        padding: 16,
         backgroundColor: Colors.background,
-        borderTopLeftRadius: 30,
-        borderTopRightRadius: 30,
-        marginTop: -30,
+        borderTopLeftRadius: 10,
+        borderTopRightRadius: 10,
+        marginTop: -20,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.1,
@@ -379,7 +390,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: 8,
+        marginBottom: 12,
     },
     title: {
         fontSize: 24,
@@ -449,7 +460,7 @@ const styles = StyleSheet.create({
     sizeOption: {
         width: 44,
         height: 44,
-        borderRadius: 22,
+        borderRadius: 10,
         backgroundColor: Colors.surface,
         justifyContent: 'center',
         alignItems: 'center',
@@ -463,7 +474,7 @@ const styles = StyleSheet.create({
     sizeText: {
         fontSize: 14,
         fontWeight: '600',
-        color: Colors.text,
+        color: Colors.textSecondary,
     },
     sizeTextSelected: {
         color: '#fff',
@@ -480,36 +491,63 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     similarSection: {
-        marginTop: 24,
-        marginBottom: 20,
+        marginTop: 20,
+        marginBottom: 40,
+        paddingHorizontal: 2,
+    },
+    sectionTitleContainer: {
+        marginBottom: 16,
+        paddingHorizontal: 2,
+    },
+    gridContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
     },
     similarCard: {
-        width: 140,
+        width: '48%',
         backgroundColor: '#fff',
-        borderRadius: 12,
-        padding: 8,
+        borderRadius: 16,
+        marginBottom: 15,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 3,
+        overflow: 'hidden',
     },
     similarImage: {
         width: '100%',
-        height: 140,
-        borderRadius: 8,
-        marginBottom: 8,
+        height: 200,
+        resizeMode: 'cover',
+    },
+    similarInfoContainer: {
+        padding: 12,
     },
     similarInfo: {
-        gap: 4,
+        marginBottom: 6,
     },
     similarTitle: {
-        fontSize: 12,
+        fontSize: 14,
         fontWeight: '600',
         color: Colors.text,
+        marginBottom: 4,
+        lineHeight: 20,
     },
     similarPrice: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: Colors.text,
+    },
+    shopNowButton: {
+        marginTop: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    shopNowText: {
         fontSize: 12,
+        fontWeight: '600',
         color: Colors.textSecondary,
     },
     ratingRow: {
@@ -604,7 +642,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.surface,
         paddingHorizontal: 20,
         paddingTop: 16,
-        paddingBottom: 32,
+        paddingBottom: 20,
         borderTopWidth: 1,
         borderTopColor: '#f0f0f0',
     },

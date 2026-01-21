@@ -7,14 +7,14 @@ import { getProducts, getCategories, getProduct } from '../api/products';
 import { getLoyaltyInfo } from '../api/loyalty';
 import { getHeroes, Hero } from '../api/hero';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
-
-
 export default function HomeScreen({ navigation }: any) {
     const { count } = useCart();
+    const { user } = useAuth();
     const [activeIndex, setActiveIndex] = React.useState(0);
     const [products, setProducts] = React.useState<any[]>([]);
     const [heroSlides, setHeroSlides] = React.useState<Hero[]>([]);
@@ -47,8 +47,12 @@ export default function HomeScreen({ navigation }: any) {
 
     useFocusEffect(
         React.useCallback(() => {
-            fetchPoints();
-        }, [])
+            if (user) {
+                fetchPoints();
+            } else {
+                setPoints(0);
+            }
+        }, [user])
     );
 
     const fetchPoints = async () => {
