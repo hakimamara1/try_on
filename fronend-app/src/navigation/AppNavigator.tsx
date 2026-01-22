@@ -23,6 +23,8 @@ import { Colors } from '../constants/Styles';
 
 import QRScannerScreen from '../screens/QRScannerScreen';
 import ProductOriginScreen from '../screens/ProductOriginScreen';
+import { navigationRef } from './navigationRef';
+
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -99,7 +101,7 @@ function MainTabs() {
 
 export default function AppNavigator() {
     return (
-        <NavigationContainer>
+        <NavigationContainer ref={navigationRef}>
             <Stack.Navigator screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="MainTabs" component={MainTabs} />
                 <Stack.Screen

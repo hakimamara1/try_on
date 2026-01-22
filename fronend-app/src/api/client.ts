@@ -2,6 +2,8 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { BASE_URL } from '../config';
+import { navigate } from '../navigation/navigationRef';
+
 
 // NOTE: precise the IP address if you are running on a physical device
 // For Android Emulator use 'http://10.0.2.2:5000'
@@ -35,6 +37,20 @@ client.interceptors.request.use(
         return config;
     },
     (error) => {
+        return Promise.reject(error);
+    }
+);
+
+// Add a response interceptor to handle 401 errors
+client.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        if (error.response && error.response.status === 401) {
+            // Token expired or invalid
+            await AsyncStorage.removeItem('token');
+            // Navigate to Login
+            navigate('Login');
+        }
         return Promise.reject(error);
     }
 );

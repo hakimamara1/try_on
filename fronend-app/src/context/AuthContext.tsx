@@ -11,6 +11,7 @@ type User = {
     inviteCode?: string;
     points?: number;
     avatar?: string;
+    wishlist?: any[];
 };
 
 type AuthContextType = {

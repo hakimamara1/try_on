@@ -24,6 +24,7 @@ export default function WishlistScreen() {
         try {
             setLoading(true);
             const { data } = await getMe();
+
             setWishlist(data.wishlist || []);
         } catch (error) {
             console.error('Failed to fetch wishlist', error);

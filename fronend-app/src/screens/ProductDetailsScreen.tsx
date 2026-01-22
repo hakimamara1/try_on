@@ -5,9 +5,10 @@ import { Star, ShoppingCart, ArrowRight, Heart } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../constants/Styles';
 import { getProduct, getRelatedProducts } from '../api/products';
-import { getMe, toggleWishlist } from '../api/auth';
+import { toggleWishlist } from '../api/auth';
 import { getReviews, addReview } from '../api/reviews';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -21,7 +22,8 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
     const [reviews, setReviews] = useState<any[]>([]);
     const [showReviewForm, setShowReviewForm] = useState(false);
     const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
-    const [user, setUser] = useState<any>(null);
+
+    const { user } = useAuth();
 
     const { addToCart } = useCart();
 
@@ -33,19 +35,19 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
 
     const fetchData = async () => {
         try {
-            const [related, userData, productReviews] = await Promise.all([
+            const [related, productReviews] = await Promise.all([
                 getRelatedProducts(product._id),
-                getMe(),
                 getReviews(product._id)
             ]);
 
             setRelatedProducts(related.data || []);
-            setUser(userData.data);
             setReviews(productReviews.data || []);
 
-            // Check if wishlisted
-            const isFav = userData.data.wishlist && userData.data.wishlist.some((p: any) => p._id === product._id || p === product._id);
-            setIsWishlisted(!!isFav);
+            // Check if wishlisted using context user
+            if (user) {
+                const isFav = user.wishlist && user.wishlist.some((p: any) => p._id === product._id || p === product._id);
+                setIsWishlisted(!!isFav);
+            }
 
         } catch (error) {
             console.error('Failed to fetch data', error);
@@ -53,6 +55,17 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
     };
 
     const handleToggleWishlist = async () => {
+        if (!user) {
+            Alert.alert(
+                "Login Required",
+                "Please login to add items to your wishlist",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Login", onPress: () => navigation.navigate('Login') }
+                ]
+            );
+            return;
+        }
         try {
             setIsWishlisted(!isWishlisted); // Optimistic update
             await toggleWishlist(product._id);
@@ -63,6 +76,18 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
     };
 
     const handleSubmitReview = async () => {
+        if (!user) {
+            Alert.alert(
+                "Login Required",
+                "Please login to write a review",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Login", onPress: () => navigation.navigate('Login') }
+                ]
+            );
+            return;
+        }
+
         try {
             if (!newReview.comment) {
                 Alert.alert('Error', 'Please add a comment');
