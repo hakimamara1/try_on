@@ -29,3 +29,13 @@ export const getCategories = async () => {
         throw error;
     }
 };
+
+export const getRelatedProducts = async (id: string) => {
+    try {
+        const response = await client.get(`/products/related/${id}`);
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching related products for ${id}:`, error);
+        throw error;
+    }
+};

@@ -1,27 +1,50 @@
+const Review = require('../models/Review');
 const Product = require('../models/Product');
 const User = require('../models/User');
 const PointTransaction = require('../models/PointTransaction');
+
+// @desc      Get reviews for a product
+// @route     GET /api/reviews/:productId
+// @access    Public
+exports.getReviews = async (req, res, next) => {
+    try {
+        const reviews = await Review.find({ product: req.params.productId })
+            .populate('user', 'name avatar_url')
+            .sort('-createdAt');
+
+        res.status(200).json({
+            success: true,
+            count: reviews.length,
+            data: reviews
+        });
+    } catch (err) {
+        next(err);
+    }
+};
 
 // @desc      Add product review
 // @route     POST /api/reviews/:productId
 // @access    Private
 exports.addReview = async (req, res, next) => {
     try {
-        const { rating, comment } = req.body;
+        req.body.product = req.params.productId;
+        req.body.user = req.user.id;
+
         const product = await Product.findById(req.params.productId);
 
         if (!product) {
             return res.status(404).json({ success: false, error: 'Product not found' });
         }
 
-        // Check if user already reviewed (optional for points, but good for logic)
-        // const alreadyReviewed = product.reviews.find(
-        //     r => r.user.toString() === req.user.id.toString()
-        // );
-        // if (alreadyReviewed) ...
+        const review = await Review.create(req.body);
 
-        // For MVP Points logic: Award +40 points
+        // Award Points (MVP Logic)
         const user = await User.findById(req.user.id);
+
+        // Prevent points abuse? (Only award if not previously reviewed logic is handled by Reciew unique index constraint throwing error)
+        // But if we want to award points, we can do it here.
+        // Let's assume unique index prevents duplicate review creation, so points only awarded once successfully.
+
         user.points_balance += 40;
         await user.save();
 
@@ -31,17 +54,19 @@ exports.addReview = async (req, res, next) => {
             description: `Reviewed product: ${product.name}`
         });
 
-        // Add review to product (Assuming Product model has reviews array, if not we just simulate success for points)
-        // Check Product model structure first? I'll assume standard structure or just skip updating product if schema not ready.
-        // Step 4 showed "Product.js", let's assume it doesn't have reviews yet or it's simple.
-        // Let's just return success for the points part as per task priority.
-
         res.status(201).json({
             success: true,
             message: 'Review added +40 Points',
-            data: { rating, comment }
+            data: review
         });
     } catch (err) {
+        // Handle duplicate review specifically
+        if (err.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                error: 'You have already reviewed this product'
+            });
+        }
         next(err);
     }
 };

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Alert, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ShoppingBag, Star, Heart, MapPin, Users, HelpCircle, LogOut, ChevronRight, Edit2, LogIn, Camera } from 'lucide-react-native';
+import { ShoppingBag, Star, Heart, MapPin, Users, HelpCircle, LogOut, ChevronRight, Edit2, LogIn, Camera, Shirt } from 'lucide-react-native';
 import { Colors } from '../constants/Styles';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
@@ -9,7 +9,8 @@ import { useAuth } from '../context/AuthContext';
 const MENU_ITEMS = [
     { icon: ShoppingBag, label: 'My Orders', route: 'Orders' },
     { icon: Star, label: 'My Points & Rewards', badge: '120 pts', route: 'Points' },
-    { icon: Heart, label: 'Saved Try-Ons', route: 'SavedTryOn' },
+    { icon: Heart, label: 'Wishlist & Favorites', route: 'Wishlist' },
+    { icon: Shirt, label: 'Saved Try-Ons', route: 'SavedTryOn' },
     { icon: MapPin, label: 'Address Book', action: 'address' },
     { icon: Camera, label: 'Scan Product Origin', route: 'ScanQR', highlight: true },
     { icon: Users, label: 'Invite Friends', action: 'share' },

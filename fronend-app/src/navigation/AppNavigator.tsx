@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, ShoppingBag, Shirt, Package, User } from 'lucide-react-native';
+import { Home, ShoppingBag, Shirt, Package, User, CreditCard } from 'lucide-react-native';
 import { View, Platform } from 'react-native';
 
 import HomeScreen from '../screens/HomeScreen';
@@ -13,6 +13,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import ProductDetailsScreen from '../screens/ProductDetailsScreen';
 import CartScreen from '../screens/CartScreen';
 import SavedTryOnScreen from '../screens/SavedTryOnScreen';
+import WishlistScreen from '../screens/WishlistScreen';
 
 import CheckoutScreen from '../screens/CheckoutScreen';
 import PointsScreen from '../screens/PointsScreen';
@@ -79,10 +80,10 @@ function MainTabs() {
                 }}
             />
             <Tab.Screen
-                name="Orders"
-                component={OrdersScreen}
+                name="Checkout"
+                component={CheckoutScreen}
                 options={{
-                    tabBarIcon: ({ color, size }) => <Package color={color} size={size} />,
+                    tabBarIcon: ({ color, size }) => <CreditCard color={color} size={size} />,
                 }}
             />
             <Tab.Screen
@@ -136,6 +137,11 @@ export default function AppNavigator() {
                     options={{ headerShown: false }}
                 />
                 <Stack.Screen
+                    name="Wishlist"
+                    component={WishlistScreen}
+                    options={{ headerShown: false }}
+                />
+                <Stack.Screen
                     name="ScanQR"
                     component={QRScannerScreen}
                     options={{ headerShown: false }}
@@ -153,6 +159,11 @@ export default function AppNavigator() {
                 <Stack.Screen
                     name="Register"
                     component={RegisterScreen}
+                    options={{ headerShown: false }}
+                />
+                <Stack.Screen
+                    name="Orders"
+                    component={OrdersScreen}
                     options={{ headerShown: false }}
                 />
             </Stack.Navigator>

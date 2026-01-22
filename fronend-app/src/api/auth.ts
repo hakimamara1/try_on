@@ -26,3 +26,12 @@ export const getMe = async () => {
         throw error;
     }
 };
+
+export const toggleWishlist = async (productId: string) => {
+    try {
+        const response = await client.put(`/auth/wishlist/${productId}`);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};

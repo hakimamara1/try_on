@@ -117,6 +117,32 @@ exports.getCategories = async (req, res, next) => {
         next(err);
     }
 };
+// @desc      Get related products based on category
+// @route     GET /api/products/related/:id
+// @access    Public
+exports.getRelatedProducts = async (req, res, next) => {
+    try {
+        const product = await Product.findById(req.params.id);
+
+        if (!product) {
+            return res.status(404).json({ success: false, error: 'Product not found' });
+        }
+
+        // Find products with same category, exclude current product
+        const related = await Product.find({
+            category: product.category,
+            _id: { $ne: product._id }
+        }).limit(4);
+
+        res.status(200).json({
+            success: true,
+            data: related
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 // @desc      Create new product
 // @route     POST /api/products
 // @access    Private/Admin/Staff
@@ -128,17 +154,37 @@ exports.createProduct = async (req, res, next) => {
         console.log('req.file:', req.file);
 
         // Handle Image Upload
-        if (req.file) {
-            const result = await cloudinary.uploader.upload(req.file.path, {
-                folder: 'products'
-            });
+        if (req.files) {
+            // Handle single image (backward compatibility)
+            if (req.files.image) {
+                const file = req.files.image[0];
+                const result = await cloudinary.uploader.upload(file.path, {
+                    folder: 'products'
+                });
 
-            // Remove file from local
-            if (fs.existsSync(req.file.path)) {
-                fs.unlinkSync(req.file.path);
+                if (fs.existsSync(file.path)) {
+                    fs.unlinkSync(file.path);
+                }
+
+                req.body.image = result.secure_url;
             }
 
-            req.body.image = result.secure_url;
+            // Handle multiple images
+            if (req.files.images) {
+                const imageUrls = [];
+                for (const file of req.files.images) {
+                    const result = await cloudinary.uploader.upload(file.path, {
+                        folder: 'products'
+                    });
+
+                    if (fs.existsSync(file.path)) {
+                        fs.unlinkSync(file.path);
+                    }
+
+                    imageUrls.push(result.secure_url);
+                }
+                req.body.images = imageUrls;
+            }
         }
 
         const product = await Product.create(req.body);
@@ -168,17 +214,43 @@ exports.updateProduct = async (req, res, next) => {
         }
 
         // Handle Image Upload
-        if (req.file) {
-            const result = await cloudinary.uploader.upload(req.file.path, {
-                folder: 'products'
-            });
+        if (req.files) {
+            // Handle single image
+            if (req.files.image) {
+                const file = req.files.image[0];
+                const result = await cloudinary.uploader.upload(file.path, {
+                    folder: 'products'
+                });
 
-            // Remove file from local
-            if (fs.existsSync(req.file.path)) {
-                fs.unlinkSync(req.file.path);
+                if (fs.existsSync(file.path)) {
+                    fs.unlinkSync(file.path);
+                }
+
+                req.body.image = result.secure_url;
             }
 
-            req.body.image = result.secure_url;
+            // Handle multiple images
+            if (req.files.images) {
+                const imageUrls = [];
+                for (const file of req.files.images) {
+                    const result = await cloudinary.uploader.upload(file.path, {
+                        folder: 'products'
+                    });
+
+                    if (fs.existsSync(file.path)) {
+                        fs.unlinkSync(file.path);
+                    }
+
+                    imageUrls.push(result.secure_url);
+                }
+
+                if (!req.body.images) req.body.images = product.images || [];
+                // if images is coming as string or array in body? 
+                // req.body.images might be existing images URLs sent by client?
+                if (typeof req.body.images === 'string') req.body.images = [req.body.images];
+
+                req.body.images = [...req.body.images, ...imageUrls];
+            }
         }
 
         product = await Product.findByIdAndUpdate(req.params.id, req.body, {
