@@ -25,7 +25,7 @@ const ProductForm = () => {
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [previewUrls, setPreviewUrls] = useState<string[]>([]);
 
-    const { register, control, handleSubmit, reset, watch, formState: { errors } } = useForm<ProductFormData>({
+    const { register, control, handleSubmit, reset, formState: { errors } } = useForm<ProductFormData>({
         defaultValues: {
             name: '',
             description: '',
