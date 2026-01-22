@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Check, Truck, CreditCard, Banknote, MapPin, ChevronRight, ShoppingBag } from 'lucide-react-native';
+import { Check, Truck, CreditCard, Banknote, MapPin, ChevronRight, ShoppingBag, Trash2 } from 'lucide-react-native';
 import { Colors } from '../constants/Styles';
 import { useCart } from '../context/CartContext';
 
 export default function CheckoutScreen({ navigation }: any) {
-    const { total, clearCart, checkout, items } = useCart();
+    const { total, clearCart, checkout, items, removeFromCart } = useCart();
     const [paymentMethod, setPaymentMethod] = useState<'card' | 'cod'>('cod');
     const [loading, setLoading] = useState(false);
 
@@ -26,7 +26,7 @@ export default function CheckoutScreen({ navigation }: any) {
             address,
             city,
             postalCode: zip,
-            country: "USA"
+            country: "DZ"
         };
 
         const success = await checkout(shippingAddress, paymentMethod);
@@ -40,8 +40,8 @@ export default function CheckoutScreen({ navigation }: any) {
                     : "Your order has been placed successfully.",
                 [
                     {
-                        text: "Continue Shopping", onPress: () => {
-                            navigation.navigate('MainTabs', { screen: 'Shop' });
+                        text: "track order", onPress: () => {
+                            navigation.navigate('Orders');
                         }
                     }
                 ]
@@ -221,6 +221,12 @@ export default function CheckoutScreen({ navigation }: any) {
                                         </Text>
                                         <Text style={styles.itemPrice}>${(item.price * item.quantity).toFixed(2)}</Text>
                                     </View>
+                                    <TouchableOpacity
+                                        onPress={() => removeFromCart(item.id, item.size, item.color)}
+                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    >
+                                        <Trash2 size={20} color={Colors.textLight} />
+                                    </TouchableOpacity>
                                 </View>
                             ))}
                         </View>
@@ -243,7 +249,7 @@ export default function CheckoutScreen({ navigation }: any) {
                                 <Text style={styles.totalLabel}>Total Amount</Text>
                                 <Text style={styles.totalSub}>Incl. VAT</Text>
                             </View>
-                            <Text style={styles.totalAmount}>${total.toFixed(2)}</Text>
+                            <Text style={styles.totalAmount}>DA {total.toFixed(2)}</Text>
                         </View>
                     </View>
 
