@@ -90,7 +90,7 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
 
     return (
         <View style={styles.container}>
-            <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 70 }} showsVerticalScrollIndicator={false}>
                 {/* Gallery */}
                 <View style={styles.imageContainer}>
                     <ScrollView
