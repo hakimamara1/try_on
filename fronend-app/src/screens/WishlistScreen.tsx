@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ActivityIndicator, Dimensions, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft, Trash2, ShoppingBag, Heart } from 'lucide-react-native';
@@ -12,36 +13,48 @@ const COLUMN_WIDTH = width / 2 - 24;
 
 export default function WishlistScreen() {
     const navigation = useNavigation<any>();
-    const [wishlist, setWishlist] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
     const { addToCart } = useCart();
+    const queryClient = useQueryClient();
 
-    useEffect(() => {
-        fetchWishlist();
-    }, []);
+    const { data: user, isLoading, refetch, isRefetching } = useQuery({
+        queryKey: ['user', 'me'],
+        queryFn: async () => {
+            const response = await getMe();
+            return response.data;
+        },
+    });
 
-    const fetchWishlist = async () => {
-        try {
-            setLoading(true);
-            const { data } = await getMe();
+    const wishlist = user?.wishlist || [];
 
-            setWishlist(data.wishlist || []);
-        } catch (error) {
-            console.error('Failed to fetch wishlist', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const toggleWishlistMutation = useMutation({
+        mutationFn: toggleWishlist,
+        onMutate: async (productId) => {
+            await queryClient.cancelQueries({ queryKey: ['user', 'me'] });
+            const previousUser = queryClient.getQueryData(['user', 'me']);
 
-    const handleRemoveFromWishlist = async (productId: string) => {
-        try {
-            // Optimistic update
-            setWishlist(prev => prev.filter(item => item._id !== productId));
-            await toggleWishlist(productId);
-        } catch (error) {
-            console.error('Failed to remove from wishlist', error);
-            fetchWishlist(); // Revert on error
-        }
+            queryClient.setQueryData(['user', 'me'], (old: any) => {
+                if (!old) return old;
+                const exists = old.wishlist.some((item: any) => item._id === productId);
+                return {
+                    ...old,
+                    wishlist: exists
+                        ? old.wishlist.filter((item: any) => item._id !== productId)
+                        : old.wishlist // We can't easily add without the full product object, so we imply removal is optimistic, addition might need invalidation
+                };
+            });
+
+            return { previousUser };
+        },
+        onError: (err, newTodo, context: any) => {
+            queryClient.setQueryData(['user', 'me'], context.previousUser);
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ['user', 'me'] });
+        },
+    });
+
+    const handleRemoveFromWishlist = (productId: string) => {
+        toggleWishlistMutation.mutate(productId);
     };
 
     const renderItem = ({ item }: { item: any }) => (
@@ -70,12 +83,7 @@ export default function WishlistScreen() {
                     style={styles.addToCartButton}
                     onPress={(e) => {
                         e.stopPropagation(); // Prevent navigation
-                        // Simple add to cart with defaults - logic from ShopScreen/ProductDetails
-                        navigation.navigate('ProductDetails', { product: item }); // Maybe better to go to details to pick size? 
-                        // Or straight add if no size/color? Assuming products have variants, safest is details.
-                        // For this button, let's just make it a "View Details" call to action or effectively duplicate the card press behaviour but visually explicit.
-                        // Actually the user task said "wishlist button ... best for ui and ux".
-                        // Let's keep it simple: Card click -> Details.
+                        navigation.navigate('ProductDetails', { product: item });
                     }}
                 >
                     <Text style={styles.addToCartText}>View Details</Text>
@@ -84,7 +92,7 @@ export default function WishlistScreen() {
         </TouchableOpacity>
     );
 
-    if (loading) {
+    if (isLoading && !wishlist.length) {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={Colors.primary} />
@@ -125,6 +133,9 @@ export default function WishlistScreen() {
                     contentContainerStyle={styles.listContainer}
                     columnWrapperStyle={styles.columnWrapper}
                     showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={Colors.primary} />
+                    }
                 />
             )}
         </SafeAreaView>

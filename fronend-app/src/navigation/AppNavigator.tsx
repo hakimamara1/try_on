@@ -2,12 +2,12 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, ShoppingBag, Shirt, Package, User, CreditCard } from 'lucide-react-native';
+import { Home, ShoppingBag, Shirt, Package, User, CreditCard, Heart } from 'lucide-react-native';
 import { View, Platform } from 'react-native';
 
 import HomeScreen from '../screens/HomeScreen';
 import ShopScreen from '../screens/ShopScreen';
-import TryOnScreen from '../screens/TryOnScreen';
+
 import OrdersScreen from '../screens/OrdersScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ProductDetailsScreen from '../screens/ProductDetailsScreen';
@@ -65,20 +65,10 @@ function MainTabs() {
                 }}
             />
             <Tab.Screen
-                name="TryOn"
-                component={TryOnScreen}
+                name="Wishlist"
+                component={WishlistScreen}
                 options={{
-                    tabBarLabel: 'Try-On',
-                    tabBarIcon: ({ color, size }) => (
-                        <View style={{
-                            backgroundColor: Colors.secondary,
-                            padding: 8,
-                            borderRadius: 20,
-                            marginBottom: 4,
-                        }}>
-                            <Shirt color={'#fff'} size={20} />
-                        </View>
-                    ),
+                    tabBarIcon: ({ color, size }) => <Heart color={color} size={size} />,
                 }}
             />
             <Tab.Screen
