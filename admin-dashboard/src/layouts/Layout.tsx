@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, ShoppingCart, Users, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, Users, Settings, LogOut, Layers } from 'lucide-react';
 
 const SidebarItem = ({ icon: Icon, label, path }: { icon: any, label: string, path: string }) => {
     const location = useLocation();
@@ -40,6 +40,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
                 <nav className="flex-1 p-4 space-y-2">
                     <SidebarItem icon={LayoutDashboard} label="Dashboard" path="/" />
                     <SidebarItem icon={Package} label="Products" path="/products" />
+                    <SidebarItem icon={Layers} label="Categories" path="/categories" />
                     <SidebarItem icon={ShoppingCart} label="Orders" path="/orders" />
                     <SidebarItem icon={Users} label="Users" path="/users" />
                     <SidebarItem icon={Package} label="Heroes" path="/heroes" />

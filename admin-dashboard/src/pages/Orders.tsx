@@ -185,7 +185,7 @@ const Orders = () => {
                                         {new Date(order.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                     </td>
                                     <td className="px-6 py-4 font-medium text-white">
-                                        ${order.totalPrice.toFixed(2)}
+                                        DA {order.totalPrice.toFixed(2)}
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="relative group/select">

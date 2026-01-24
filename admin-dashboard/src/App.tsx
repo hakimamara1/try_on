@@ -9,6 +9,8 @@ import Users from './pages/Users';
 import ProductForm from './pages/ProductForm';
 import Heroes from './pages/Heroes';
 import HeroForm from './pages/HeroForm';
+import Categories from './pages/Categories';
+import CategoryForm from './pages/CategoryForm';
 
 const PrivateRoute = ({ children }: { children: ReactNode }) => {
   const token = localStorage.getItem('token');
@@ -35,6 +37,9 @@ function App() {
                   <Route path="/heroes" element={<Heroes />} />
                   <Route path="/heroes/new" element={<HeroForm />} />
                   <Route path="/heroes/:id/edit" element={<HeroForm />} />
+                  <Route path="/categories" element={<Categories />} />
+                  <Route path="/categories/new" element={<CategoryForm />} />
+                  <Route path="/categories/:id/edit" element={<CategoryForm />} />
                 </Routes>
               </Layout>
             </PrivateRoute>

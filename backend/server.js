@@ -58,6 +58,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/try-on', tryOnRoutes);
 app.use('/api/loyalty', loyaltyRoutes);
+app.use('/api/categories', require('./routes/categoryRoutes'));
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/heroes', require('./routes/heroRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
