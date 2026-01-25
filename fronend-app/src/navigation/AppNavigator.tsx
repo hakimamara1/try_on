@@ -13,6 +13,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import ProductDetailsScreen from '../screens/ProductDetailsScreen';
 import CartScreen from '../screens/CartScreen';
 import SavedTryOnScreen from '../screens/SavedTryOnScreen';
+import TryOnScreen from '../screens/TryOnScreen';
 import WishlistScreen from '../screens/WishlistScreen';
 
 import CheckoutScreen from '../screens/CheckoutScreen';
@@ -156,6 +157,11 @@ export default function AppNavigator() {
                 <Stack.Screen
                     name="Orders"
                     component={OrdersScreen}
+                    options={{ headerShown: false }}
+                />
+                <Stack.Screen
+                    name="TryOn"
+                    component={TryOnScreen}
                     options={{ headerShown: false }}
                 />
             </Stack.Navigator>

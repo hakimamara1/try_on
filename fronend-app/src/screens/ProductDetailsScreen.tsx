@@ -333,11 +333,8 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
                 <View style={styles.buttonsRow}>
                     <TouchableOpacity
                         style={styles.tryOnButton}
-                        onPress={() => navigation.navigate('MainTabs', {
-                            screen: 'TryOn',
-                            params: {
-                                productImage: product.pureImage || product.image
-                            }
+                        onPress={() => navigation.navigate('TryOn', {
+                            productImage: product.pureImage || product.image
                         })}
                     >
                         <Text style={styles.tryOnButtonText}>Try it on me</Text>
