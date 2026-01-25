@@ -108,7 +108,10 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
 
     const handleAddToCart = () => {
         addToCart(product, selectedSize, selectedColor);
-        Alert.alert("Success", "Added to Cart!");
+        Alert.alert("✅ Success to add to cart", "Added to Cart!", [
+            { text: "View Cart", onPress: () => navigation.navigate('Cart') },
+            { text: "continue shopping", style: "cancel" },
+        ]);
     };
 
     if (!product) return null;
