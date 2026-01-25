@@ -71,6 +71,18 @@ export default function TryOnScreen({ route }: any) {
     };
 
     const handleGenerate = async () => {
+        if (points < 20) {
+            Alert.alert(
+                "Insufficient Points",
+                "You need 20 points for a regular try-on. Complete missions to earn more!",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Earn Points", onPress: () => navigation.navigate('Points' as never) }
+                ]
+            );
+            return;
+        }
+
         setLoading(true);
         try {
             // Real Call:
@@ -78,6 +90,7 @@ export default function TryOnScreen({ route }: any) {
 
             if (res.success && res.data.generatedImage) {
                 setGeneratedImage(res.data.generatedImage);
+                setPoints(prev => Math.max(0, prev - 20)); // Update local state
             } else {
                 Alert.alert('Try-On Failed', 'Could not generate image.');
             }
@@ -99,7 +112,7 @@ export default function TryOnScreen({ route }: any) {
                 productImage,
             });
             Alert.alert("Saved", "Look saved to your collection!");
-            navigation.goBack();
+            navigation.navigate('SavedTryOn' as never);
         } catch (error) {
             console.error(error);
         }
@@ -249,8 +262,8 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     backButtonCircle: {
-        width: 40,
-        height: 40,
+        width: 45,
+        height: 45,
         borderRadius: 20,
         backgroundColor: '#fff',
         justifyContent: 'center',
@@ -267,8 +280,8 @@ const styles = StyleSheet.create({
         maxWidth: width * 0.5,
     },
     headerProductImage: {
-        width: 24,
-        height: 24,
+        width: 40,
+        height: 40,
         borderRadius: 12,
         backgroundColor: '#eee',
     },
@@ -282,10 +295,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#fff',
-        paddingHorizontal: 12,
-        paddingVertical: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
         borderRadius: 20,
-        gap: 4,
+        gap: 7,
     },
     pointsText: {
         fontSize: 14,
@@ -296,7 +309,7 @@ const styles = StyleSheet.create({
         color: '#fff',
         textAlign: 'center',
         marginTop: 10,
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '500',
         textShadowColor: 'rgba(0, 0, 0, 0.5)',
         textShadowOffset: { width: 0, height: 1 },

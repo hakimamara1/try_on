@@ -10,6 +10,12 @@ const fs = require('fs');
 // @access    Private
 exports.generateTryOn = async (req, res, next) => {
     try {
+        // Check for sufficient points first
+        const userCheck = await User.findById(req.user.id);
+        if (userCheck.points_balance < 20) {
+            return res.status(400).json({ success: false, error: 'Insufficient points. You need 20 points.' });
+        }
+
         // 1. Upload User Image to Cloudinary or use URL
         // req.files is now used because of upload.fields
         let userImageUrl = req.body.image; // Check body first (if sent as URL)
