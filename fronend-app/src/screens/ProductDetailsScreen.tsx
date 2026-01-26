@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Dimensions, Alert, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Dimensions, Alert, TextInput, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Star, ShoppingCart, ArrowRight, Heart } from 'lucide-react-native';
+import { Star, ShoppingCart, ArrowRight, Heart, Check } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../constants/Styles';
 import { getProduct, getRelatedProducts } from '../api/products';
@@ -11,6 +11,10 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 
 const { width, height } = Dimensions.get('window');
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export default function ProductDetailsScreen({ route, navigation }: any) {
     const { product } = route.params || {};
@@ -22,6 +26,7 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
     const [reviews, setReviews] = useState<any[]>([]);
     const [showReviewForm, setShowReviewForm] = useState(false);
     const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
+    const [isAdded, setIsAdded] = useState(false); // New state for animation
 
     const { user } = useAuth();
 
@@ -107,11 +112,19 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
     };
 
     const handleAddToCart = () => {
+        if (isAdded) {
+            navigation.navigate('Cart' as never);
+            return;
+        }
+
         addToCart(product, selectedSize, selectedColor);
-        Alert.alert("✅ Success to add to cart", "Added to Cart!", [
-            { text: "View Cart", onPress: () => navigation.navigate('Cart') },
-            { text: "continue shopping", style: "cancel" },
-        ]);
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setIsAdded(true);
+
+        // Optional: Reset state after 3 seconds if you want them to be able to add again easily
+        // But requested flow is: click -> animate -> click again -> go to cart
+        // So we keep it until they leave or maybe reset if they change options?
+        // For now, let's keep it simple as requested.
     };
 
     if (!product) return null;
@@ -346,11 +359,18 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={styles.addToCartButton}
+                        style={[styles.addToCartButton, isAdded && styles.goToCartButton]}
                         onPress={handleAddToCart}
+                        activeOpacity={0.8}
                     >
-                        <ShoppingCart size={20} color="#fff" />
-                        <Text style={styles.addToCartText}>Add to Cart</Text>
+                        {isAdded ? (
+                            <Check size={20} color="#fff" />
+                        ) : (
+                            <ShoppingCart size={20} color="#fff" />
+                        )}
+                        <Text style={styles.addToCartText}>
+                            {isAdded ? "Go to Cart" : "Add to Cart"}
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -705,5 +725,8 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: '700',
         fontSize: 16,
+    },
+    goToCartButton: {
+        backgroundColor: Colors.success, // Or keep same color, or use a specific success color
     }
 });
