@@ -64,10 +64,7 @@ exports.generateTryOn = async (req, res, next) => {
 
         console.log('Generating Try-On with params:', { userImageUrl, clothImageUrl });
 
-        const video_prompt = "Make the sheets in the style of the logo. Make the scene natural."; // Using the specific prompt structure from example if needed, or a generic one.
-        // The user request example had: "Make the sheets in the style of the logo. Make the scene natural."
-        // We should probably adapt this or use a generic one like "A photo of a person wearing the cloth." if we knew better.
-        // For now, let's use a generic prompt that fits the task.
+
         const prompt = `You are a computer vision and image synthesis system specialized in virtual fashion try-on.
 
 INPUT:

@@ -17,3 +17,12 @@ export const addReview = async (productId: string, data: { rating: number, comme
         throw error;
     }
 };
+
+export const deleteReview = async (reviewId: string) => {
+    try {
+        const response = await client.delete(`/reviews/${reviewId}`);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};

@@ -70,3 +70,30 @@ exports.addReview = async (req, res, next) => {
         next(err);
     }
 };
+
+// @desc      Delete review
+// @route     DELETE /api/reviews/:id
+// @access    Private
+exports.deleteReview = async (req, res, next) => {
+    try {
+        const review = await Review.findById(req.params.id);
+
+        if (!review) {
+            return res.status(404).json({ success: false, error: 'Review not found' });
+        }
+
+        // Make sure user is review owner
+        if (review.user.toString() !== req.user.id && req.user.role !== 'admin') {
+            return res.status(401).json({ success: false, error: 'Not authorized to delete this review' });
+        }
+
+        await review.deleteOne();
+
+        res.status(200).json({
+            success: true,
+            data: {}
+        });
+    } catch (err) {
+        next(err);
+    }
+};

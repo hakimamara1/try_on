@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Dimensions, Alert, TextInput, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Star, ShoppingCart, ArrowRight, Heart, Check } from 'lucide-react-native';
+import { Star, ShoppingCart, ArrowRight, Heart, Check, Trash } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../constants/Styles';
 import { getProduct, getRelatedProducts } from '../api/products';
 import { toggleWishlist } from '../api/auth';
-import { getReviews, addReview } from '../api/reviews';
+import { getReviews, addReview, deleteReview } from '../api/reviews';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -110,6 +110,31 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
             Alert.alert('Error', message);
         }
     };
+
+    const handleDeleteReview = async (reviewId: string) => {
+        Alert.alert(
+            "Delete Review",
+            "Are you sure you want to delete this review?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            await deleteReview(reviewId);
+                            setReviews(reviews.filter(r => r._id !== reviewId));
+                            Alert.alert("Success", "Review deleted successfully");
+                        } catch (error: any) {
+                            const message = error.response?.data?.error || 'Failed to delete review';
+                            Alert.alert('Error', message);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
 
     const handleAddToCart = () => {
         if (isAdded) {
@@ -292,7 +317,14 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
                             <View key={index} style={styles.reviewCard}>
                                 <View style={styles.reviewHeader}>
                                     <Text style={styles.reviewerName}>{review.user?.name || 'User'}</Text>
-                                    <Text style={styles.reviewDate}>{new Date(review.createdAt).toLocaleDateString()}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                        <Text style={styles.reviewDate}>{new Date(review.createdAt).toLocaleDateString()}</Text>
+                                        {user && (user._id === review.user?._id || user._id === review.user) && (
+                                            <TouchableOpacity onPress={() => handleDeleteReview(review._id)}>
+                                                <Trash size={14} color={Colors.error || '#FF0000'} />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
                                 </View>
                                 <View style={styles.starRowSmall}>
                                     {[...Array(5)].map((_, i) => (
