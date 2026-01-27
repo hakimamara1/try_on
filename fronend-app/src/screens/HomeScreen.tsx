@@ -28,6 +28,7 @@ export default function HomeScreen({ navigation }: any) {
     }, []);
 
     const fetchData = async () => {
+        const startTime = performance.now();
         try {
             const [productsData, categoriesData, heroesData] = await Promise.all([
                 getProducts(),
@@ -41,6 +42,8 @@ export default function HomeScreen({ navigation }: any) {
         } catch (error) {
             console.error(error);
         } finally {
+            const endTime = performance.now();
+            console.log(`[Performance] HomeScreen data fetch took ${endTime - startTime}ms`);
             setLoading(false);
         }
     };
