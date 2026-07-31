@@ -8,6 +8,7 @@ const crypto = require('crypto');
 exports.register = async (req, res, next) => {
     try {
         const { name, email, password, inviteCode } = req.body;
+        req.log.debug({ email, hasInviteCode: !!inviteCode }, 'Attempting user registration');
 
         // Generate Invite Code (Simple 6 char random)
         const generatedInviteCode = crypto.randomBytes(3).toString('hex').toUpperCase();
@@ -50,6 +51,7 @@ exports.register = async (req, res, next) => {
             description: 'Sign up bonus'
         });
 
+        req.log.info({ userId: user._id }, 'User successfully registered');
         sendTokenResponse(user, 200, res);
     } catch (err) {
         next(err);
@@ -62,6 +64,7 @@ exports.register = async (req, res, next) => {
 exports.login = async (req, res, next) => {
     try {
         const { email, password } = req.body;
+        req.log.debug({ email }, 'Login attempt');
 
         // Validate email & password
         if (!email || !password) {
@@ -72,6 +75,7 @@ exports.login = async (req, res, next) => {
         const user = await User.findOne({ email }).select('+password');
 
         if (!user) {
+            req.log.warn({ email }, 'Failed login attempt: User not found');
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
 
@@ -79,9 +83,11 @@ exports.login = async (req, res, next) => {
         const isMatch = await user.matchPassword(password);
 
         if (!isMatch) {
+            req.log.warn({ email }, 'Failed login attempt: Password mismatch');
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
 
+        req.log.info({ userId: user._id }, 'User successfully logged in');
         sendTokenResponse(user, 200, res);
     } catch (err) {
         next(err);
@@ -130,6 +136,35 @@ exports.getMe = async (req, res, next) => {
     try {
         const user = await User.findById(req.user.id).populate('wishlist');
 
+        res.status(200).json({
+            success: true,
+            data: user
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// @desc      Update current user's profile details
+// @route     PUT /api/auth/updatedetails
+// @access    Private
+exports.updateDetails = async (req, res, next) => {
+    try {
+        // Whitelist explicitly rather than passing req.body straight through,
+        // so a client can't slip in role/email/password/points_balance etc.
+        const fieldsToUpdate = {};
+        for (const field of ['name', 'phone', 'wilaya', 'commune']) {
+            if (req.body[field] !== undefined) {
+                fieldsToUpdate[field] = req.body[field];
+            }
+        }
+
+        const user = await User.findByIdAndUpdate(req.user.id, fieldsToUpdate, {
+            new: true,
+            runValidators: true
+        }).populate('wishlist');
+
+        req.log.info({ userId: user._id }, 'User profile updated');
         res.status(200).json({
             success: true,
             data: user

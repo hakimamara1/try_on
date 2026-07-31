@@ -7,6 +7,15 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Please add a name']
     },
+    phone: {
+        type: String
+    },
+    wilaya: {
+        type: String
+    },
+    commune: {
+        type: String
+    },
     email: {
         type: String,
         required: [true, 'Please add an email'],
@@ -50,6 +59,14 @@ const UserSchema = new mongoose.Schema({
         type: mongoose.Schema.ObjectId,
         ref: 'Product'
     }],
+    reviews: [{
+        type: mongoose.Schema.ObjectId,
+        ref: 'Review'
+    }],
+    firstReview: {
+        type: Boolean,
+        default: false
+    },
     createdAt: {
         type: Date,
         default: Date.now

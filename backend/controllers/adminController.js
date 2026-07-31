@@ -7,6 +7,7 @@ const Product = require('../models/Product');
 // @access    Private/Admin
 exports.getUsers = async (req, res, next) => {
     try {
+        req.log.debug('Fetching all users');
         const users = await User.find().sort('-createdAt');
         res.status(200).json({
             success: true,
@@ -24,6 +25,7 @@ exports.getUsers = async (req, res, next) => {
 exports.updateUserPoints = async (req, res, next) => {
     try {
         const { points } = req.body;
+        req.log.debug({ userId: req.params.id, points }, 'Updating user points');
 
         const user = await User.findByIdAndUpdate(
             req.params.id,
@@ -32,6 +34,7 @@ exports.updateUserPoints = async (req, res, next) => {
         );
 
         if (!user) {
+            req.log.warn({ userId: req.params.id }, 'User not found for point update');
             return res.status(404).json({ success: false, error: 'User not found' });
         }
 
@@ -49,6 +52,7 @@ exports.updateUserPoints = async (req, res, next) => {
 // @access    Private/Admin
 exports.getAnalytics = async (req, res, next) => {
     try {
+        req.log.debug('Fetching admin analytics data');
         // Total Users
         const totalUsers = await User.countDocuments({ role: 'user' });
 

@@ -2,7 +2,7 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const helmet = require('helmet');
-const morgan = require('morgan');
+const pinoHttp = require('pino-http');
 const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
 const { connectRedis } = require('./config/redis');
@@ -15,14 +15,16 @@ dotenv.config();
 // Connect to Database
 connectDB();
 // Connect to Redis
-connectRedis();
+// connectRedis();
 
 const app = express();
 
 // Security Middleware
 app.use(helmet());
-app.use(cors());
-console.log('CORS Enabled');
+app.use(cors({
+    origin: '*'
+}));
+logger.info('CORS Enabled');
 
 // Rate Limiting
 const limiter = rateLimit({
@@ -33,7 +35,9 @@ app.use(limiter);
 
 // Logging
 if (process.env.NODE_ENV === 'development') {
-    app.use(morgan('dev'));
+    app.use(pinoHttp({ logger }));
+} else {
+    app.use(pinoHttp({ logger }));
 }
 
 // Body parser

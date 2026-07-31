@@ -21,7 +21,7 @@ export default function QRScannerScreen() {
         getPermissions();
     }, []);
 
-    const handleBarCodeScanned = async ({ type, data }: { type: string; data: string }) => {
+    const handleBarCodeScanned = async ({ data }: { type: string; data: string }) => {
         setScanned(true);
         try {
             const result = await scanOrderQR(data);

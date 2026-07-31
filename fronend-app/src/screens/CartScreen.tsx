@@ -1,53 +1,57 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Minus, Plus, Trash2, ArrowRight } from 'lucide-react-native';
-import { Colors } from '../constants/Styles';
-import { useCart } from '../context/CartContext';
+import { Minus, Plus, X, ChevronLeft, ShoppingBag } from 'lucide-react-native';
+import { Colors, Fonts } from '../constants/Styles';
+import { useCart, CartItem } from '../context/CartContext';
 
 export default function CartScreen({ navigation }: any) {
     const { items, removeFromCart, updateQuantity, total } = useCart();
 
-    const renderItem = ({ item }: { item: any }) => (
+    const renderItem = ({ item }: { item: CartItem }) => (
         <View style={styles.card}>
-            <Image source={{ uri: item.image }} style={styles.image} />
+            <Image source={{ uri: item.image }} style={styles.image} contentFit="cover" />
             <View style={styles.details}>
-                <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.variant}>{item.size} • <View style={[styles.colorDot, { backgroundColor: item.color }]} /></Text>
-
+                <View style={styles.nameRow}>
+                    <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+                    <TouchableOpacity onPress={() => removeFromCart(item.id, item.size, item.color)} hitSlop={8}>
+                        <X size={15} color={Colors.textLight} />
+                    </TouchableOpacity>
+                </View>
+                <View style={styles.variantRow}>
+                    <Text style={styles.variant}>{item.size}</Text>
+                    <View style={[styles.colorDot, { backgroundColor: item.color }]} />
+                </View>
                 <View style={styles.row}>
-                    <Text style={styles.price}>${item.price}</Text>
                     <View style={styles.quantityControls}>
                         <TouchableOpacity
                             style={styles.qtBtn}
                             onPress={() => item.quantity > 1 ? updateQuantity(item.id, item.size, item.color, -1) : removeFromCart(item.id, item.size, item.color)}
                         >
-                            <Minus size={14} color={Colors.text} />
+                            <Minus size={13} color={Colors.text} />
                         </TouchableOpacity>
                         <Text style={styles.qtText}>{item.quantity}</Text>
                         <TouchableOpacity
                             style={styles.qtBtn}
                             onPress={() => updateQuantity(item.id, item.size, item.color, 1)}
                         >
-                            <Plus size={14} color={Colors.text} />
+                            <Plus size={13} color={Colors.text} />
                         </TouchableOpacity>
                     </View>
+                    <Text style={styles.price}>${(item.price * item.quantity).toFixed(2)}</Text>
                 </View>
             </View>
-            <TouchableOpacity
-                style={styles.deleteBtn}
-                onPress={() => removeFromCart(item.id, item.size, item.color)}
-            >
-                <Trash2 size={18} color={Colors.textLight} />
-            </TouchableOpacity>
         </View>
     );
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
-                <Text style={styles.title}>Shopping Cart</Text>
-                <Text style={styles.count}>{items.length} items</Text>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <ChevronLeft size={20} color={Colors.text} />
+                </TouchableOpacity>
+                <Text style={styles.title}>Cart</Text>
             </View>
 
             <FlatList
@@ -57,9 +61,14 @@ export default function CartScreen({ navigation }: any) {
                 contentContainerStyle={styles.list}
                 ListEmptyComponent={
                     <View style={styles.empty}>
-                        <Text style={styles.emptyText}>Your cart is empty.</Text>
-                        <TouchableOpacity onPress={() => navigation.navigate('MainTabs', { screen: 'Shop' })}>
-                            <Text style={styles.link}>Start Shopping</Text>
+                        <ShoppingBag size={38} color={Colors.borderStrong} />
+                        <Text style={styles.emptyTitle}>Your cart is empty</Text>
+                        <Text style={styles.emptyText}>Add pieces you love and they'll show up here.</Text>
+                        <TouchableOpacity
+                            style={styles.emptyCta}
+                            onPress={() => navigation.navigate('MainTabs', { screen: 'Shop' })}
+                        >
+                            <Text style={styles.emptyCtaText}>Browse Products</Text>
                         </TouchableOpacity>
                     </View>
                 }
@@ -67,16 +76,23 @@ export default function CartScreen({ navigation }: any) {
 
             {items.length > 0 && (
                 <View style={styles.footer}>
+                    <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Subtotal</Text>
+                        <Text style={styles.summaryValue}>${total.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Delivery Fee</Text>
+                        <Text style={styles.summaryValue}>Free</Text>
+                    </View>
                     <View style={styles.totalRow}>
                         <Text style={styles.totalLabel}>Total</Text>
                         <Text style={styles.totalAmount}>${total.toFixed(2)}</Text>
                     </View>
                     <TouchableOpacity
                         style={styles.checkoutBtn}
-                        onPress={() => navigation.navigate('Checkout')}
+                        onPress={() => navigation.navigate('MainTabs', { screen: 'Checkout' })}
                     >
                         <Text style={styles.checkoutText}>Proceed to Checkout</Text>
-                        <ArrowRight size={20} color="#fff" />
                     </TouchableOpacity>
                 </View>
             )}
@@ -90,149 +106,194 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.background,
     },
     header: {
-        padding: 20,
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
+        alignItems: 'center',
+        gap: 14,
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+    },
+    backButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: Colors.surface,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     title: {
-        fontSize: 28,
-        fontWeight: '700',
+        fontFamily: Fonts.serifSemiBold,
+        fontSize: 20,
         color: Colors.text,
-    },
-    count: {
-        fontSize: 14,
-        color: Colors.textLight,
     },
     list: {
         paddingHorizontal: 20,
+        paddingBottom: 20,
+        flexGrow: 1,
     },
     card: {
         flexDirection: 'row',
-        backgroundColor: '#fff',
-        borderRadius: 16,
+        gap: 12,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: 14,
         padding: 12,
-        marginBottom: 16,
-        shadowColor: '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
+        marginBottom: 12,
+        backgroundColor: Colors.surface,
     },
     image: {
-        width: 80,
-        height: 80,
-        borderRadius: 12,
-        backgroundColor: '#eee',
+        width: 64,
+        height: 76,
+        borderRadius: 10,
+        backgroundColor: Colors.surfaceSunken,
     },
     details: {
         flex: 1,
-        marginLeft: 12,
         justifyContent: 'center',
+        gap: 4,
+    },
+    nameRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 8,
     },
     name: {
-        fontSize: 16,
-        fontWeight: '600',
+        flex: 1,
+        fontFamily: Fonts.sansSemiBold,
+        fontSize: 13,
         color: Colors.text,
-        marginBottom: 4,
     },
-    variant: {
-        fontSize: 14,
-        color: Colors.textSecondary,
-        marginBottom: 8,
+    variantRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 6,
+    },
+    variant: {
+        fontFamily: Fonts.sansRegular,
+        fontSize: 12,
+        color: Colors.textLight,
     },
     colorDot: {
         width: 10,
         height: 10,
         borderRadius: 5,
         borderWidth: 1,
-        borderColor: '#eee',
+        borderColor: Colors.border,
     },
     row: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-    },
-    price: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
+        marginTop: 4,
     },
     quantityControls: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
-        backgroundColor: Colors.background,
-        padding: 4,
-        borderRadius: 8,
+        gap: 10,
+        borderWidth: 1,
+        borderColor: Colors.borderStrong,
+        borderRadius: 16,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
     },
     qtBtn: {
-        width: 24,
-        height: 24,
-        justifyContent: 'center',
+        width: 14,
         alignItems: 'center',
-        backgroundColor: '#fff',
-        borderRadius: 6,
     },
     qtText: {
-        fontSize: 14,
-        fontWeight: '600',
+        fontFamily: Fonts.sansBold,
+        fontSize: 13,
+        color: Colors.text,
+        minWidth: 14,
+        textAlign: 'center',
     },
-    deleteBtn: {
-        padding: 8,
-        justifyContent: 'center',
+    price: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 14,
+        color: Colors.text,
     },
     empty: {
-        marginTop: 100,
+        flex: 1,
         alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 100,
+        paddingHorizontal: 40,
+        gap: 12,
+    },
+    emptyTitle: {
+        fontFamily: Fonts.serifSemiBold,
+        fontSize: 18,
+        color: Colors.text,
     },
     emptyText: {
-        fontSize: 18,
-        color: Colors.textSecondary,
-        marginBottom: 12,
+        fontFamily: Fonts.sansRegular,
+        fontSize: 14,
+        color: Colors.textLight,
+        textAlign: 'center',
     },
-    link: {
-        fontSize: 16,
-        color: Colors.primary,
-        fontWeight: '600',
+    emptyCta: {
+        backgroundColor: Colors.text,
+        paddingHorizontal: 22,
+        paddingVertical: 13,
+        borderRadius: 23,
+        marginTop: 6,
+    },
+    emptyCtaText: {
+        fontFamily: Fonts.sansBold,
+        color: Colors.darkText,
+        fontSize: 13,
     },
     footer: {
-        padding: 20,
-        backgroundColor: '#fff',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        shadowColor: '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 10,
+        paddingHorizontal: 20,
+        paddingTop: 14,
+        paddingBottom: 34,
+        backgroundColor: 'rgba(255,255,255,0.94)',
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+        gap: 6,
+    },
+    summaryRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    summaryLabel: {
+        fontFamily: Fonts.sansRegular,
+        fontSize: 13,
+        color: Colors.textSecondary,
+    },
+    summaryValue: {
+        fontFamily: Fonts.sansRegular,
+        fontSize: 13,
+        color: Colors.textSecondary,
     },
     totalRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 20,
+        marginTop: 4,
+        marginBottom: 10,
     },
     totalLabel: {
-        fontSize: 18,
-        color: Colors.textSecondary,
+        fontFamily: Fonts.sansSemiBold,
+        fontSize: 14,
+        color: Colors.text,
     },
     totalAmount: {
-        fontSize: 24,
-        fontWeight: '700',
+        fontFamily: Fonts.sansBold,
+        fontSize: 18,
         color: Colors.text,
     },
     checkoutBtn: {
         backgroundColor: Colors.text,
-        flexDirection: 'row',
+        height: 52,
+        borderRadius: 26,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingVertical: 18,
-        borderRadius: 30,
-        gap: 10,
     },
     checkoutText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: '700',
-    }
+        fontFamily: Fonts.sansBold,
+        color: Colors.darkText,
+        fontSize: 14,
+    },
 });

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Star, Gift, ChevronRight, Lock, Unlock, Share2, CheckCircle, Clock, Ticket } from 'lucide-react-native';
+import { Star, ChevronRight, Share2, CheckCircle, Clock, Ticket } from 'lucide-react-native';
 import { Colors } from '../constants/Styles';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getLoyaltyInfo, redeemReward, claimProfileBonus } from '../api/loyalty';
+import { getLoyaltyInfo, claimProfileBonus } from '../api/loyalty';
 import { useAuth } from '../context/AuthContext';
 
 const MISSIONS_LIST = [
@@ -18,9 +18,7 @@ const MISSIONS_LIST = [
 export default function PointsScreen({ navigation }: any) {
     const { user } = useAuth();
     const [balance, setBalance] = useState({ points: 0, tier: 'Bronze' });
-    const [rewards, setRewards] = useState<any[]>([]);
     const [history, setHistory] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         fetchLoyaltyData();
@@ -30,22 +28,9 @@ export default function PointsScreen({ navigation }: any) {
         try {
             const data = await getLoyaltyInfo();
             setBalance({ points: data.points, tier: data.tier });
-            setRewards(data.rewards);
             setHistory(data.history || []);
         } catch (error) {
             console.error('Failed to fetch loyalty data', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleRedeem = async (rewardId: string) => {
-        try {
-            await redeemReward(rewardId);
-            Alert.alert('Success', 'Reward redeemed successfully!');
-            fetchLoyaltyData(); // Refresh points
-        } catch (error: any) {
-            Alert.alert('Error', error.response?.data?.error || 'Failed to redeem reward');
         }
     };
 

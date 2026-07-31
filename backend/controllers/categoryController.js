@@ -7,6 +7,7 @@ const fs = require('fs');
 // @access    Public
 exports.getCategories = async (req, res, next) => {
     try {
+        req.log.debug('Fetching all categories');
         const categories = await Category.find();
 
         res.status(200).json({
@@ -24,9 +25,11 @@ exports.getCategories = async (req, res, next) => {
 // @access    Public
 exports.getCategory = async (req, res, next) => {
     try {
+        req.log.debug({ categoryId: req.params.id }, 'Fetching category');
         const category = await Category.findById(req.params.id);
 
         if (!category) {
+            req.log.warn({ categoryId: req.params.id }, 'Category not found');
             return res.status(404).json({ success: false, error: 'Category not found' });
         }
 
@@ -44,6 +47,7 @@ exports.getCategory = async (req, res, next) => {
 // @access    Private/Admin/Staff
 exports.createCategory = async (req, res, next) => {
     try {
+        req.log.debug({ bodyKeys: Object.keys(req.body) }, 'Creating new category');
         // Handle Image Upload
         if (req.file) {
             const result = await cloudinary.uploader.upload(req.file.path, {
@@ -59,6 +63,7 @@ exports.createCategory = async (req, res, next) => {
 
         const category = await Category.create(req.body);
 
+        req.log.info({ categoryId: category._id }, 'Category successfully created');
         res.status(201).json({
             success: true,
             data: category
@@ -76,9 +81,11 @@ exports.createCategory = async (req, res, next) => {
 // @access    Private/Admin/Staff
 exports.updateCategory = async (req, res, next) => {
     try {
+        req.log.debug({ categoryId: req.params.id }, 'Attempting to update category');
         let category = await Category.findById(req.params.id);
 
         if (!category) {
+            req.log.warn({ categoryId: req.params.id }, 'Category to update not found');
             return res.status(404).json({ success: false, error: 'Category not found' });
         }
 
@@ -100,6 +107,7 @@ exports.updateCategory = async (req, res, next) => {
             runValidators: true
         });
 
+        req.log.info({ categoryId: category._id }, 'Category successfully updated');
         res.status(200).json({
             success: true,
             data: category
@@ -117,14 +125,17 @@ exports.updateCategory = async (req, res, next) => {
 // @access    Private/Admin/Staff
 exports.deleteCategory = async (req, res, next) => {
     try {
+        req.log.debug({ categoryId: req.params.id }, 'Attempting to delete category');
         const category = await Category.findById(req.params.id);
 
         if (!category) {
+            req.log.warn({ categoryId: req.params.id }, 'Category to delete not found');
             return res.status(404).json({ success: false, error: 'Category not found' });
         }
 
         await category.deleteOne();
 
+        req.log.info({ categoryId: category._id }, 'Category successfully deleted');
         res.status(200).json({
             success: true,
             data: {}

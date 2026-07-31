@@ -21,7 +21,7 @@ export default function LoginScreen() {
         try {
             await login(email, password);
             navigation.navigate('MainTabs', { screen: 'Profile' });
-        } catch (error) {
+        } catch {
             // Error handled in AuthContext
         } finally {
             setLoading(false);

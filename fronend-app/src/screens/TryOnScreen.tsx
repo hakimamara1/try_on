@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, Alert, ActivityIndicator, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, Alert, ActivityIndicator, StatusBar, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Camera, ArrowLeft, Sparkles, MoreHorizontal, Image as ImageIcon, Star } from 'lucide-react-native';
-import { Colors } from '../constants/Styles';
+import { ArrowLeft, ImagePlus, Camera, Star } from 'lucide-react-native';
+import { Colors, Fonts } from '../constants/Styles';
 import { generateTryOn } from '../api/try-on';
 import { getLoyaltyInfo } from '../api/loyalty';
 import { useSavedTryOn } from '../context/SavedTryOnContext';
 import { useNavigation } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
 
@@ -19,6 +20,55 @@ const SAMPLE_USER_IMAGES = [
     'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=1000'
 ];
 
+// ─── Aperture loading indicator ──────────────────────────
+const ApertureSpinner = () => {
+    const ring1 = useRef(new Animated.Value(0)).current;
+    const ring2 = useRef(new Animated.Value(0)).current;
+    const scan = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        const spin1 = Animated.loop(
+            Animated.timing(ring1, { toValue: 1, duration: 3000, easing: Easing.linear, useNativeDriver: true })
+        );
+        const spin2 = Animated.loop(
+            Animated.timing(ring2, { toValue: 1, duration: 4000, easing: Easing.linear, useNativeDriver: true })
+        );
+        const sweep = Animated.loop(
+            Animated.sequence([
+                Animated.timing(scan, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+                Animated.timing(scan, { toValue: 0, duration: 0, useNativeDriver: true }),
+            ])
+        );
+        spin1.start();
+        spin2.start();
+        sweep.start();
+        return () => {
+            spin1.stop();
+            spin2.stop();
+            sweep.stop();
+        };
+    }, [ring1, ring2, scan]);
+
+    const rotate1 = ring1.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    const rotate2 = ring2.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
+    const scanTranslate = scan.interpolate({ inputRange: [0, 1], outputRange: [-90, 90] });
+
+    return (
+        <View style={styles.apertureWrap}>
+            <Animated.View style={[styles.apertureRingOuter, { transform: [{ rotate: rotate1 }] }]} />
+            <Animated.View style={[styles.apertureRingInner, { transform: [{ rotate: rotate2 }] }]} />
+            <View style={styles.apertureMask}>
+                <Animated.View style={[styles.apertureScanline, { transform: [{ translateY: scanTranslate }] }]}>
+                    <LinearGradient
+                        colors={['rgba(183,146,78,0)', 'rgba(183,146,78,0.45)', 'rgba(183,146,78,0)']}
+                        style={StyleSheet.absoluteFill}
+                    />
+                </Animated.View>
+            </View>
+        </View>
+    );
+};
+
 export default function TryOnScreen({ route }: any) {
     const navigation = useNavigation();
     const [userImage, setUserImage] = useState(SAMPLE_USER_IMAGES[2]);
@@ -27,7 +77,9 @@ export default function TryOnScreen({ route }: any) {
     const [generatedImage, setGeneratedImage] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [points, setPoints] = useState(0);
+    const [savedToast, setSavedToast] = useState(false);
     const { saveItem } = useSavedTryOn();
+    const toastAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
         if (route?.params?.productImage) {
@@ -49,20 +101,30 @@ export default function TryOnScreen({ route }: any) {
         }
     };
 
-    const handleNewPhoto = async () => {
-        // Request permission
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-            Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to make this work!');
+    const pickFrom = async (source: 'library' | 'camera') => {
+        const permission = source === 'library'
+            ? await ImagePicker.requestMediaLibraryPermissionsAsync()
+            : await ImagePicker.requestCameraPermissionsAsync();
+
+        if (permission.status !== 'granted') {
+            Alert.alert(
+                'Permission needed',
+                source === 'library'
+                    ? 'We need photo library access to pick a photo.'
+                    : 'We need camera access to take a photo.'
+            );
             return;
         }
 
-        const result = await ImagePicker.launchImageLibraryAsync({
+        const options: ImagePicker.ImagePickerOptions = {
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [3, 4],
             quality: 0.8,
-        });
+        };
+        const result = source === 'library'
+            ? await ImagePicker.launchImageLibraryAsync(options)
+            : await ImagePicker.launchCameraAsync(options);
 
         if (!result.canceled) {
             setUserImage(result.assets[0].uri);
@@ -85,7 +147,6 @@ export default function TryOnScreen({ route }: any) {
 
         setLoading(true);
         try {
-            // Real Call:
             const res = await generateTryOn(userImage, productImage);
 
             if (res.success && res.data.generatedImage) {
@@ -103,6 +164,19 @@ export default function TryOnScreen({ route }: any) {
         }
     };
 
+    const handleRetake = () => {
+        setGeneratedImage(null);
+    };
+
+    const showToast = () => {
+        setSavedToast(true);
+        toastAnim.setValue(0);
+        Animated.timing(toastAnim, { toValue: 1, duration: 250, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
+        setTimeout(() => {
+            Animated.timing(toastAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setSavedToast(false));
+        }, 1400);
+    };
+
     const handleSave = async () => {
         if (!generatedImage) return;
         try {
@@ -111,8 +185,8 @@ export default function TryOnScreen({ route }: any) {
                 originalImage: userImage,
                 productImage,
             });
-            Alert.alert("Saved", "Look saved to your collection!");
-            navigation.navigate('SavedTryOn' as never);
+            showToast();
+            setTimeout(() => navigation.navigate('SavedTryOn' as never), 1200);
         } catch (error) {
             console.error(error);
         }
@@ -138,76 +212,113 @@ export default function TryOnScreen({ route }: any) {
                 </View>
             )}
 
-            {/* Top Header Full Width */}
+            {/* Top Header */}
             <SafeAreaView style={styles.safeAreaTop} edges={['top']}>
                 <View style={styles.topBarFull}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButtonCircle}>
-                        <ArrowLeft size={24} color="#000" />
-                    </TouchableOpacity>
+                    <View style={styles.glassPill}>
+                        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.glassPillTouch}>
+                            <ArrowLeft size={20} color={Colors.darkText} />
+                        </TouchableOpacity>
+                    </View>
 
                     <View style={styles.productInfoContainer}>
+                        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
                         <Image source={{ uri: productImage }} style={styles.headerProductImage} />
                         <Text style={styles.headerProductName} numberOfLines={1}>{productName}</Text>
                     </View>
 
                     <TouchableOpacity style={styles.pointsBadge} onPress={() => navigation.navigate('Points' as never)}>
-                        <Star size={16} fill={Colors.primary} color={Colors.primary} />
+                        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+                        <View style={styles.pointsDot} />
                         <Text style={styles.pointsText}>{points}</Text>
                     </TouchableOpacity>
                 </View>
 
                 {!generatedImage && !loading && (
                     <Text style={styles.instructionText}>
-                        Step back and position yourself in the frame.
+                        Center yourself in frame, or upload a photo
                     </Text>
+                )}
+                {loading && (
+                    <Text style={styles.instructionText}>Crafting your fit…</Text>
                 )}
             </SafeAreaView>
 
             {/* Loading / Processing State */}
             {loading && (
                 <View style={styles.loadingContainer}>
-                    <BlurView intensity={30} tint="light" style={styles.loadingBlur}>
-                        <ActivityIndicator size="large" color={Colors.text} />
-                        <Text style={styles.loadingText}>Fitting garment...</Text>
-                    </BlurView>
+                    <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
+                    <ApertureSpinner />
                 </View>
             )}
 
-            {/* Bottom Controls */}
-            <SafeAreaView style={styles.bottomContainer} edges={['bottom']}>
-                <View style={styles.controlsRow}>
-                    {/* Left: Gallery/Camera */}
-                    <TouchableOpacity style={styles.sideButton} onPress={handleNewPhoto}>
-                        <View style={styles.sideButtonBlur}>
-                            <ImageIcon size={24} color="#fff" />
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* Center: Action Button */}
-                    {generatedImage ? (
-                        <TouchableOpacity style={styles.mainActionButton} onPress={handleSave}>
-                            <View style={[styles.mainActionInner, { backgroundColor: '#fff' }]}>
-                                <Text style={styles.mainActionText}>Save</Text>
+            {/* Bottom Controls — live/idle view */}
+            {!generatedImage && (
+                <SafeAreaView style={styles.bottomContainer} edges={['bottom']}>
+                    <View style={styles.controlsRow}>
+                        <TouchableOpacity style={styles.sideButton} onPress={() => pickFrom('library')} disabled={loading}>
+                            <View style={styles.sideButtonBlur}>
+                                <ImagePlus size={22} color={Colors.darkText} />
                             </View>
+                            <Text style={styles.sideButtonLabel}>Upload</Text>
                         </TouchableOpacity>
-                    ) : (
+
                         <TouchableOpacity style={styles.mainActionButton} onPress={handleGenerate} disabled={loading}>
                             <View style={styles.shutterOuter}>
                                 <View style={styles.shutterInner}>
-                                    <Text style={styles.shutterText}>Try On</Text>
+                                    {loading ? (
+                                        <ActivityIndicator color={Colors.text} />
+                                    ) : (
+                                        <Text style={styles.shutterText}>Try On</Text>
+                                    )}
                                 </View>
                             </View>
                         </TouchableOpacity>
-                    )}
 
-                    {/* Right: More Options */}
-                    <TouchableOpacity style={styles.sideButton} onPress={() => { }}>
-                        <View style={styles.sideButtonBlur}>
-                            <MoreHorizontal size={24} color="#fff" />
+                        <TouchableOpacity style={styles.sideButton} onPress={() => pickFrom('camera')} disabled={loading}>
+                            <View style={styles.sideButtonBlur}>
+                                <Camera size={22} color={Colors.darkText} />
+                            </View>
+                            <Text style={styles.sideButtonLabel}>Take Photo</Text>
+                        </TouchableOpacity>
+                    </View>
+                </SafeAreaView>
+            )}
+
+            {/* Bottom Controls — result view */}
+            {generatedImage && !loading && (
+                <LinearGradient
+                    colors={['rgba(14,13,12,0)', 'rgba(14,13,12,0.85)']}
+                    style={styles.resultBar}
+                >
+                    <SafeAreaView edges={['bottom']}>
+                        <View style={styles.resultButtonsRow}>
+                            <TouchableOpacity style={styles.retakeButton} onPress={handleRetake}>
+                                <Text style={styles.retakeButtonText}>Retake</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+                                <Text style={styles.saveButtonText}>Save Look</Text>
+                            </TouchableOpacity>
                         </View>
-                    </TouchableOpacity>
-                </View>
-            </SafeAreaView>
+                    </SafeAreaView>
+                </LinearGradient>
+            )}
+
+            {savedToast && (
+                <Animated.View
+                    style={[
+                        styles.toast,
+                        {
+                            opacity: toastAnim,
+                            transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
+                        },
+                    ]}
+                >
+                    <Star size={14} fill={Colors.primary} color={Colors.primary} />
+                    <Text style={styles.toastText}>Saved to your Looks</Text>
+                </Animated.View>
+            )}
         </View>
     );
 }
@@ -215,7 +326,7 @@ export default function TryOnScreen({ route }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#000',
+        backgroundColor: Colors.dark,
     },
     backgroundImage: {
         ...StyleSheet.absoluteFillObject,
@@ -233,14 +344,14 @@ const styles = StyleSheet.create({
         position: 'absolute',
         width: 1,
         height: '100%',
-        backgroundColor: 'rgba(255, 255, 255, 0.3)',
+        backgroundColor: 'rgba(247,243,236,0.06)',
         left: '33.33%',
     },
     gridLineHorizontal: {
         position: 'absolute',
         height: 1,
         width: '100%',
-        backgroundColor: 'rgba(255, 255, 255, 0.3)',
+        backgroundColor: 'rgba(247,243,236,0.06)',
         top: '33.33%',
     },
     safeAreaTop: {
@@ -250,7 +361,6 @@ const styles = StyleSheet.create({
         right: 0,
         width: '100%',
         zIndex: 10,
-        backgroundColor: 'rgba(0,0,0,0.3)', // Semi-transparent background for header visibility
         paddingBottom: 10,
     },
     topBarFull: {
@@ -260,57 +370,76 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingTop: 10,
         width: '100%',
+        gap: 8,
     },
-    backButtonCircle: {
-        width: 45,
-        height: 45,
-        borderRadius: 20,
-        backgroundColor: '#fff',
+    glassPill: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        overflow: 'hidden',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(247,243,236,0.12)',
+    },
+    glassPillTouch: {
+        width: '100%',
+        height: '100%',
         justifyContent: 'center',
         alignItems: 'center',
     },
     productInfoContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        paddingHorizontal: 10,
+        paddingHorizontal: 6,
         paddingVertical: 6,
         borderRadius: 20,
         gap: 8,
-        maxWidth: width * 0.5,
+        maxWidth: width * 0.42,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(247,243,236,0.12)',
     },
     headerProductImage: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        backgroundColor: '#eee',
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: Colors.surfaceSunken,
     },
     headerProductName: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#000',
-        maxWidth: 100,
+        fontFamily: Fonts.sansMedium,
+        fontSize: 13,
+        color: Colors.darkText,
+        maxWidth: 110,
     },
     pointsBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
+        paddingHorizontal: 11,
+        paddingVertical: 8,
         borderRadius: 20,
-        gap: 7,
+        gap: 6,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(183,146,78,0.4)',
+    },
+    pointsDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: Colors.primary,
     },
     pointsText: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: Colors.text,
+        fontFamily: Fonts.sansBold,
+        fontSize: 12,
+        color: Colors.primaryLight,
     },
     instructionText: {
-        color: '#fff',
+        color: Colors.darkText,
         textAlign: 'center',
         marginTop: 10,
-        fontSize: 16,
-        fontWeight: '500',
+        fontFamily: Fonts.sansMedium,
+        fontSize: 13,
         textShadowColor: 'rgba(0, 0, 0, 0.5)',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 4,
@@ -321,20 +450,40 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         zIndex: 20,
     },
-    loadingBlur: {
-        width: 160,
-        height: 160,
-        borderRadius: 80,
+    apertureWrap: {
+        width: 180,
+        height: 180,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.6)',
+    },
+    apertureRingOuter: {
+        position: 'absolute',
+        width: 180,
+        height: 180,
+        borderRadius: 90,
+        borderWidth: 2,
+        borderColor: 'rgba(183,146,78,0.5)',
+        borderStyle: 'dashed',
+    },
+    apertureRingInner: {
+        position: 'absolute',
+        width: 140,
+        height: 140,
+        borderRadius: 70,
+        borderWidth: 1.5,
+        borderColor: 'rgba(247,243,236,0.35)',
+    },
+    apertureMask: {
+        width: 180,
+        height: 180,
+        borderRadius: 90,
         overflow: 'hidden',
     },
-    loadingText: {
-        marginTop: 12,
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#000',
+    apertureScanline: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        height: '45%',
     },
     bottomContainer: {
         position: 'absolute',
@@ -347,66 +496,116 @@ const styles = StyleSheet.create({
     controlsRow: {
         flexDirection: 'row',
         justifyContent: 'space-around',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         paddingHorizontal: 30,
     },
     sideButton: {
-        width: 50,
-        height: 50,
-        justifyContent: 'center',
+        width: 60,
         alignItems: 'center',
+        gap: 6,
     },
     sideButtonBlur: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: 'rgba(255,255,255,0.2)',
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: 'rgba(247,243,236,0.12)',
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.3)',
+        borderColor: 'rgba(247,243,236,0.25)',
+    },
+    sideButtonLabel: {
+        fontFamily: Fonts.sansSemiBold,
+        fontSize: 11,
+        color: 'rgba(247,243,236,0.7)',
     },
     mainActionButton: {
         justifyContent: 'center',
         alignItems: 'center',
     },
     shutterOuter: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        borderWidth: 4,
-        borderColor: '#fff',
+        width: 76,
+        height: 76,
+        borderRadius: 38,
+        borderWidth: 3,
+        borderColor: Colors.darkText,
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: 'transparent',
     },
     shutterInner: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: '#fff',
+        width: 62,
+        height: 62,
+        borderRadius: 31,
+        backgroundColor: Colors.darkText,
         justifyContent: 'center',
         alignItems: 'center',
     },
     shutterText: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#000',
+        fontFamily: Fonts.sansBold,
+        fontSize: 13,
+        color: Colors.text,
     },
-    mainActionInner: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
+    resultBar: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        paddingTop: 30,
+        zIndex: 10,
+    },
+    resultButtonsRow: {
+        flexDirection: 'row',
+        gap: 10,
+        paddingHorizontal: 20,
+        paddingBottom: 4,
+    },
+    retakeButton: {
+        flex: 1,
+        height: 52,
+        borderRadius: 26,
+        borderWidth: 1.5,
+        borderColor: 'rgba(247,243,236,0.5)',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOpacity: 0.2,
-        shadowRadius: 10,
-        elevation: 5,
     },
-    mainActionText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#000',
-    }
+    retakeButtonText: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 14,
+        color: Colors.darkText,
+    },
+    saveButton: {
+        flex: 1.3,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: Colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    saveButtonText: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 14,
+        color: Colors.text,
+    },
+    toast: {
+        position: 'absolute',
+        bottom: 130,
+        left: '50%',
+        marginLeft: -100,
+        width: 200,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: Colors.darkText,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        zIndex: 30,
+    },
+    toastText: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 12,
+        color: Colors.text,
+    },
 });

@@ -25,19 +25,11 @@ export const getLoyaltyInfo = async () => {
 };
 
 export const redeemReward = async (rewardId: string) => {
-    try {
-        const response = await client.post('/loyalty/redeem', { rewardId });
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await client.post('/loyalty/redeem', { rewardId });
+    return response.data;
 };
 
 export const claimProfileBonus = async () => {
-    try {
-        const response = await client.post('/loyalty/profile-bonus');
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await client.post('/loyalty/profile-bonus');
+    return response.data;
 };

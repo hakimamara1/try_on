@@ -7,6 +7,7 @@ const PointTransaction = require('../models/PointTransaction');
 // @access    Private
 exports.getBalance = async (req, res, next) => {
     try {
+        req.log.debug({ userId: req.user.id }, 'Fetching loyalty balance');
         const user = await User.findById(req.user.id);
         const history = await PointTransaction.find({ user: req.user.id }).sort('-createdAt');
 
@@ -25,6 +26,7 @@ exports.getBalance = async (req, res, next) => {
 // @access    Private
 exports.getRewards = async (req, res, next) => {
     try {
+        req.log.debug('Fetching available rewards');
         const rewards = await Reward.find({ isActive: true });
 
         // Seed if empty (for MVP demo)
@@ -54,14 +56,17 @@ exports.getRewards = async (req, res, next) => {
 exports.redeemReward = async (req, res, next) => {
     try {
         const { rewardId } = req.body;
+        req.log.debug({ userId: req.user.id, rewardId }, 'Attempting reward redemption');
         const user = await User.findById(req.user.id);
         const reward = await Reward.findById(rewardId);
 
         if (!reward) {
+            req.log.warn({ rewardId }, 'Reward not found');
             return res.status(404).json({ success: false, error: 'Reward not found' });
         }
 
         if (user.points_balance < reward.costPoints) {
+            req.log.warn({ userId: req.user.id, required: reward.costPoints, balance: user.points_balance }, 'Insufficient points for reward');
             return res.status(400).json({ success: false, error: 'Insufficient points' });
         }
 
@@ -76,6 +81,7 @@ exports.redeemReward = async (req, res, next) => {
             description: `Redeemed ${reward.title}`
         });
 
+        req.log.info({ userId: user.id, rewardId: reward._id }, 'Reward successfully redeemed');
         res.status(200).json({
             success: true,
             message: `Successfully redeemed ${reward.title}`,
@@ -91,9 +97,11 @@ exports.redeemReward = async (req, res, next) => {
 // @access    Private
 exports.completeProfileBonus = async (req, res, next) => {
     try {
+        req.log.debug({ userId: req.user.id }, 'Attempting profile completion bonus');
         const user = await User.findById(req.user.id);
 
         if (user.checklist && user.checklist.profileCompleted) {
+            req.log.warn({ userId: req.user.id }, 'Profile completion bonus already claimed');
             return res.status(400).json({ success: false, error: 'Bonus already claimed' });
         }
 
@@ -112,6 +120,7 @@ exports.completeProfileBonus = async (req, res, next) => {
             description: 'Profile Completed Bonus'
         });
 
+        req.log.info({ userId: user._id }, 'Profile completion bonus awarded');
         res.status(200).json({
             success: true,
             message: 'Profile completed! You earned 30 points.',

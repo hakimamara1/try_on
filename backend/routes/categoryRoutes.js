@@ -1,5 +1,4 @@
 const express = require('express');
-const multer = require('multer');
 const {
     getCategories,
     getCategory,
@@ -11,8 +10,7 @@ const {
 const router = express.Router();
 
 const { protect, authorize } = require('../middleware/auth');
-
-const upload = multer({ dest: 'uploads/' });
+const upload = require('../middleware/upload');
 
 router.route('/')
     .get(getCategories)

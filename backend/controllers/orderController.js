@@ -14,6 +14,7 @@ exports.createOrder = async (req, res, next) => {
             paymentMethod,
             totalPrice
         } = req.body;
+        req.log.debug({ orderItemsCount: orderItems?.length, userId: req.user._id, totalPrice }, 'Attempting to create order');
 
         if (orderItems && orderItems.length === 0) {
             return res.status(400).json({ success: false, error: 'No order items' });
@@ -32,7 +33,8 @@ exports.createOrder = async (req, res, next) => {
         });
 
         const createdOrder = await order.save();
-
+        
+        req.log.info({ orderId: createdOrder._id }, 'Order successfully created');
         res.status(201).json({
             success: true,
             data: createdOrder
@@ -47,6 +49,7 @@ exports.createOrder = async (req, res, next) => {
 // @access    Private
 exports.getMyOrders = async (req, res, next) => {
     try {
+        req.log.debug({ userId: req.user._id }, 'Fetching user orders');
         const orders = await Order.find({ user: req.user._id }).sort('-createdAt');
 
         res.status(200).json({
@@ -89,6 +92,7 @@ exports.getOrderById = async (req, res, next) => {
 exports.scanOrderQr = async (req, res, next) => {
     try {
         const { qrCode } = req.body;
+        req.log.debug({ qrCode }, 'Scanning order QR code');
 
         if (!qrCode) {
             return res.status(400).json({ success: false, error: 'QR Code is required' });
@@ -97,11 +101,13 @@ exports.scanOrderQr = async (req, res, next) => {
         const order = await Order.findOne({ qrCode });
 
         if (!order) {
+            req.log.warn({ qrCode }, 'Invalid QR Code scanned');
             return res.status(404).json({ success: false, error: 'Invalid QR Code' });
         }
 
         // Check if order belongs to user
         if (order.user.toString() !== req.user.id) {
+            req.log.warn({ orderId: order._id, userId: req.user.id }, 'Unauthorized QR scan attempt');
             return res.status(401).json({ success: false, error: 'This order does not belong to you' });
         }
 
@@ -148,6 +154,8 @@ exports.scanOrderQr = async (req, res, next) => {
             message: 'QR Scanned! You earned 200 points.',
             data: order
         });
+        
+        req.log.info({ orderId: order._id, userId: req.user.id }, 'Order QR successfully scanned and points awarded');
 
     } catch (err) {
         next(err);

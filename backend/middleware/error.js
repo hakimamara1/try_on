@@ -4,8 +4,12 @@ const errorHandler = (err, req, res, next) => {
     let error = { ...err };
     error.message = err.message;
 
-    // Log to console for dev
-    logger.error(err.stack || err.message);
+    // Log the error
+    if (req.log) {
+        req.log.error({ err }, err.message);
+    } else {
+        logger.error({ err }, err.message);
+    }
 
     // Mongoose bad ObjectId
     if (err.name === 'CastError') {
@@ -25,9 +29,17 @@ const errorHandler = (err, req, res, next) => {
         error = { message, statusCode: 400 };
     }
 
-    res.status(error.statusCode || 500).json({
+    // Don't leak internal error details (DB/Cloudinary/Replicate messages,
+    // stack traces) to clients once the app is running in production.
+    const isProduction = process.env.NODE_ENV === 'production';
+    const statusCode = error.statusCode || 500;
+    const message = (!isProduction || statusCode < 500)
+        ? (error.message || 'Server Error')
+        : 'Server Error';
+
+    res.status(statusCode).json({
         success: false,
-        error: error.message || 'Server Error'
+        error: message
     });
 };
 

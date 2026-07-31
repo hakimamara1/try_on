@@ -1,4 +1,7 @@
-const BASE_URL = 'https://zed-dream-api.onrender.com/api';
+// Set API_BASE_URL before running, e.g.:
+//   API_BASE_URL=http://192.168.1.50:5001/api node api-benchmark.js
+// Matches the same EXPO_PUBLIC_API_URL value the app itself uses (see src/config.ts).
+const BASE_URL = process.env.API_BASE_URL || 'http://localhost:5001/api';
 
 // Optional: Add a valid JWT token here to test protected routes
 const AUTH_TOKEN = '';

@@ -1,6 +1,11 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as api from '../api/orders';
 import { Alert } from 'react-native';
+import { Product, OrderItem } from '../types';
+
+const CART_STORAGE_KEY = '@cart_v1';
+const CART_PERSIST_DEBOUNCE_MS = 400;
 
 export type CartItem = {
     id: string;
@@ -16,17 +21,17 @@ export type CartItem = {
 export type Order = {
     _id: string; // Backend uses _id
     id?: string; // For frontend compatibility
-    date: string;
-    total: number | string;
+    date?: string;
+    totalPrice: number; // matches backend's Order schema field name
     status: string;
-    items: any[];
-    trackingNumber: string;
+    orderItems?: OrderItem[];
+    trackingNumber?: string;
     createdAt?: string;
 };
 
 type CartContextType = {
     items: CartItem[];
-    addToCart: (product: any, size: string, color: string) => void;
+    addToCart: (product: Product, size: string, color: string) => void;
     removeFromCart: (itemId: string, size: string, color: string) => void;
     updateQuantity: (itemId: string, size: string, color: string, delta: number) => void;
     clearCart: () => void;
@@ -35,7 +40,7 @@ type CartContextType = {
     // Orders
     orders: Order[];
     fetchOrders: () => Promise<void>;
-    checkout: (shippingAddress: any, paymentMethod: string) => Promise<boolean>;
+    checkout: (shippingAddress: any, paymentMethod: string) => Promise<Order | null>;
 };
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -43,11 +48,46 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: ReactNode }) {
     const [items, setItems] = useState<CartItem[]>([]);
     const [orders, setOrders] = useState<Order[]>([]);
+    const [isHydrated, setIsHydrated] = useState(false);
 
-    const addToCart = (product: any, size: string, color: string) => {
+    // Rehydrate the cart from disk once on mount. Corrupt/missing data just
+    // means an empty cart, same defensive pattern AuthContext uses for its
+    // own AsyncStorage read.
+    useEffect(() => {
+        (async () => {
+            try {
+                const stored = await AsyncStorage.getItem(CART_STORAGE_KEY);
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    if (Array.isArray(parsed?.items)) {
+                        setItems(parsed.items);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load cart from storage', error);
+            } finally {
+                setIsHydrated(true);
+            }
+        })();
+    }, []);
+
+    // Persist on every change, debounced so rapid quantity taps don't cause
+    // a write storm. Skipped until hydration completes so we don't clobber
+    // stored data with the initial empty state.
+    useEffect(() => {
+        if (!isHydrated) return;
+        const timer = setTimeout(() => {
+            AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ items })).catch(error => {
+                console.error('Failed to persist cart', error);
+            });
+        }, CART_PERSIST_DEBOUNCE_MS);
+        return () => clearTimeout(timer);
+    }, [items, isHydrated]);
+
+    const addToCart = (product: Product, size: string, color: string) => {
         setItems(currentItems => {
             const existingItem = currentItems.find(
-                item => item.id === (product._id || product.id) && item.size === size && item.color === color
+                item => item.id === product._id && item.size === size && item.color === color
             );
 
             if (existingItem) {
@@ -59,7 +99,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             }
 
             return [...currentItems, {
-                id: product._id || product.id,
+                id: product._id,
                 name: product.name,
                 price: product.price,
                 image: product.image,
@@ -101,7 +141,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     const checkout = async (shippingAddress: any, paymentMethod: string) => {
         try {
-            const orderItems = items.map(item => ({
+            const orderItems: OrderItem[] = items.map(item => ({
                 product: item.id, // backend expects 'product' ID
                 name: item.name,
                 quantity: item.quantity,
@@ -126,13 +166,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
                 // Fetch updated orders and clear cart
                 fetchOrders();
                 clearCart();
-                return true;
+                return res.data;
             }
-            return false;
+            return null;
         } catch (error: any) {
             const msg = error.response?.data?.error || 'Checkout failed';
             Alert.alert('Error', msg);
-            return false;
+            return null;
         }
     };
 

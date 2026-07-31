@@ -1,12 +1,9 @@
 const express = require('express');
-const multer = require('multer');
 const { generateTryOn, saveLook, getSavedLooks, deleteSavedLook } = require('../controllers/tryOnController');
 const { protect } = require('../middleware/auth');
+const upload = require('../middleware/upload');
 
 const router = express.Router();
-
-// Multer config
-const upload = multer({ dest: 'uploads/' });
 
 router.post('/generate', protect, upload.fields([
     { name: 'image', maxCount: 1 },

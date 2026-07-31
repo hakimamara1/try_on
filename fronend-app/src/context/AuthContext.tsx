@@ -12,6 +12,9 @@ type User = {
     points?: number;
     avatar?: string;
     wishlist?: any[];
+    phone?: string;
+    wilaya?: string;
+    commune?: string;
 };
 
 type AuthContextType = {
@@ -21,6 +24,7 @@ type AuthContextType = {
     login: (email: string, password: string) => Promise<void>;
     register: (name: string, email: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
+    refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -94,8 +98,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
+    // Re-pulls the current user from the server and updates the AuthContext
+    // copy — used after profile edits so screens reading `user` (e.g. the
+    // Profile hub's header) reflect the change without a full app restart.
+    const refreshUser = async () => {
+        try {
+            const res = await api.getMe();
+            if (res.success) {
+                setUser(res.data);
+            }
+        } catch (error) {
+            console.error('Failed to refresh user', error);
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+        <AuthContext.Provider value={{ user, token, loading, login, register, logout, refreshUser }}>
             {children}
         </AuthContext.Provider>
     );

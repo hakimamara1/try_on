@@ -22,10 +22,12 @@ const OrderSchema = new mongoose.Schema({
         }
     ],
     shippingAddress: {
-        address: { type: String, required: true },
-        city: { type: String, required: true },
-        postalCode: { type: String, required: true },
-        country: { type: String, required: true }
+        fullName: { type: String, required: true },
+        phone: { type: String, required: true },
+        wilaya: { type: String, required: true },
+        commune: { type: String, required: true },
+        addressLine: { type: String, required: true },
+        country: { type: String, required: true, default: 'DZ' }
     },
     paymentMethod: {
         type: String,

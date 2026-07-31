@@ -1,77 +1,93 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, KeyboardAvoidingView } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Check, Truck, CreditCard, Banknote, MapPin, ChevronRight, ShoppingBag, Trash2 } from 'lucide-react-native';
-import { Colors } from '../constants/Styles';
+import { useQuery } from '@tanstack/react-query';
+import { Banknote, ShoppingBag } from 'lucide-react-native';
+import { Colors, Fonts } from '../constants/Styles';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { getMe } from '../api/auth';
+import WilayaPicker from '../components/WilayaPicker';
 
 export default function CheckoutScreen({ navigation }: any) {
-    const { total, clearCart, checkout, items, removeFromCart } = useCart();
-    const [paymentMethod, setPaymentMethod] = useState<'card' | 'cod'>('cod');
+    const { total, checkout, items } = useCart();
+    const { user } = useAuth();
     const [loading, setLoading] = useState(false);
 
-    // Form states
-    const [address, setAddress] = useState("123 Fashion Ave");
-    const [city, setCity] = useState("New York");
-    const [zip, setZip] = useState("10012");
+    const [fullName, setFullName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [wilaya, setWilaya] = useState('');
+    const [commune, setCommune] = useState('');
+    const [addressLine, setAddressLine] = useState('');
+    const [prefilled, setPrefilled] = useState(false);
+
+    // Shares the same ['user', 'me'] cache the Profile/Wishlist screens use.
+    const { data: meData } = useQuery({
+        queryKey: ['user', 'me'],
+        queryFn: async () => (await getMe()).data,
+        initialData: user ?? undefined,
+        enabled: !!user,
+    });
+
+    // Prefill delivery details from the saved profile once, the first time
+    // it's available — after that, leave whatever the user typed alone (this
+    // order's address doesn't have to match their saved preference).
+    useEffect(() => {
+        if (meData && !prefilled) {
+            setFullName(meData.name || '');
+            setPhone(meData.phone || '');
+            setWilaya(meData.wilaya || '');
+            setCommune(meData.commune || '');
+            setPrefilled(true);
+        }
+    }, [meData, prefilled]);
+
+    const isAddressComplete = fullName.trim() && phone.trim() && wilaya && commune.trim() && addressLine.trim();
 
     const handlePlaceOrder = async () => {
-        if (items.length === 0) {
-            Alert.alert("Cart Empty", "Please add items to your cart before checking out.");
-            return;
-        }
+        if (!isAddressComplete) return;
+
         setLoading(true);
 
         const shippingAddress = {
-            address,
-            city,
-            postalCode: zip,
-            country: "DZ"
+            fullName: fullName.trim(),
+            phone: phone.trim(),
+            wilaya,
+            commune: commune.trim(),
+            addressLine: addressLine.trim(),
+            country: 'DZ',
         };
 
-        const success = await checkout(shippingAddress, paymentMethod);
+        const order = await checkout(shippingAddress, 'Cash on Delivery');
         setLoading(false);
 
-        if (success) {
-            Alert.alert(
-                "Order Confirmed! 🎉",
-                paymentMethod === 'cod'
-                    ? "Your order has been placed successfully. Please have the cash ready upon delivery."
-                    : "Your order has been placed successfully.",
-                [
-                    {
-                        text: "track order", onPress: () => {
-                            navigation.navigate('Orders');
-                        }
-                    }
-                ]
-            );
+        if (order) {
+            navigation.navigate('OrderConfirmation', {
+                orderId: order._id,
+                total: order.totalPrice ?? total,
+                paymentMethod: 'cod',
+            });
         }
     };
-
-    const EmptyCartView = () => (
-        <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconContainer}>
-                <ShoppingBag size={48} color={Colors.textSecondary} />
-            </View>
-            <Text style={styles.emptyTitle}>Your cart is empty</Text>
-            <Text style={styles.emptyText}>Add some items to get started!</Text>
-            <TouchableOpacity
-                style={styles.continueBtn}
-                onPress={() => navigation.navigate('MainTabs', { screen: 'Shop' })}
-            >
-                <Text style={styles.continueBtnText}>Start Shopping</Text>
-            </TouchableOpacity>
-        </View>
-    );
 
     if (items.length === 0) {
         return (
             <SafeAreaView style={styles.container} edges={['top']}>
                 <View style={styles.header}>
-                    <Text style={styles.title}>Checkout</Text>
+                    <Text style={styles.title}>Delivery Details</Text>
                 </View>
-                <EmptyCartView />
+                <View style={styles.emptyContainer}>
+                    <ShoppingBag size={38} color={Colors.borderStrong} />
+                    <Text style={styles.emptyTitle}>Your cart is empty</Text>
+                    <Text style={styles.emptyText}>Add some items to get started!</Text>
+                    <TouchableOpacity
+                        style={styles.emptyCta}
+                        onPress={() => navigation.navigate('MainTabs', { screen: 'Shop' })}
+                    >
+                        <Text style={styles.emptyCtaText}>Browse Products</Text>
+                    </TouchableOpacity>
+                </View>
             </SafeAreaView>
         );
     }
@@ -79,203 +95,118 @@ export default function CheckoutScreen({ navigation }: any) {
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
-                <Text style={styles.title}>Checkout</Text>
-                <View style={styles.stepContainer}>
-                    <View style={styles.stepActive}>
-                        <Text style={styles.stepText}>1</Text>
-                    </View>
-                    <View style={styles.stepLine} />
-                    <View style={[styles.stepActive, { backgroundColor: Colors.text }]}>
-                        <Check size={12} color="#fff" />
-                    </View>
-                </View>
+                <Text style={styles.title}>Delivery Details</Text>
             </View>
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={{ flex: 1 }}
             >
-                <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-                    {/* Delivery Section */}
-                    <View style={styles.sectionHeader}>
-                        <MapPin size={20} color={Colors.primary} />
-                        <Text style={styles.sectionTitle}>Delivery Address</Text>
+                <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                    <View style={styles.field}>
+                        <Text style={styles.label}>Full Name</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={fullName}
+                            onChangeText={setFullName}
+                            placeholder="e.g. Amina Belkacem"
+                            placeholderTextColor={Colors.textLight}
+                        />
                     </View>
 
-                    <View style={styles.card}>
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Street Address</Text>
+                    <View style={styles.field}>
+                        <Text style={styles.label}>Phone Number</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={phone}
+                            onChangeText={setPhone}
+                            placeholder="05XX XX XX XX"
+                            placeholderTextColor={Colors.textLight}
+                            keyboardType="phone-pad"
+                        />
+                    </View>
+
+                    <View style={styles.row}>
+                        <View style={[styles.field, { flex: 1 }]}>
+                            <WilayaPicker label="Wilaya" value={wilaya} onChange={setWilaya} />
+                        </View>
+                        <View style={[styles.field, { flex: 1 }]}>
+                            <Text style={styles.label}>Commune</Text>
                             <TextInput
                                 style={styles.input}
-                                value={address}
-                                onChangeText={setAddress}
-                                placeholder="123 Fashion Street"
+                                value={commune}
+                                onChangeText={setCommune}
+                                placeholder="e.g. Hydra"
                                 placeholderTextColor={Colors.textLight}
                             />
                         </View>
-                        <View style={styles.row}>
-                            <View style={[styles.inputGroup, { flex: 1 }]}>
-                                <Text style={styles.label}>City</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={city}
-                                    onChangeText={setCity}
-                                    placeholder="New York"
-                                    placeholderTextColor={Colors.textLight}
-                                />
-                            </View>
-                            <View style={[styles.inputGroup, { width: 100 }]}>
-                                <Text style={styles.label}>ZIP Code</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={zip}
-                                    onChangeText={setZip}
-                                    placeholder="10001"
-                                    keyboardType="numeric"
-                                    placeholderTextColor={Colors.textLight}
-                                />
-                            </View>
+                    </View>
+
+                    <View style={styles.field}>
+                        <Text style={styles.label}>Address</Text>
+                        <TextInput
+                            style={[styles.input, styles.textArea]}
+                            value={addressLine}
+                            onChangeText={setAddressLine}
+                            placeholder="Street, building, floor…"
+                            placeholderTextColor={Colors.textLight}
+                            multiline
+                        />
+                    </View>
+
+                    {/* Payment */}
+                    <Text style={[styles.label, { marginTop: 8, marginBottom: 10 }]}>Payment</Text>
+                    <View style={styles.paymentOption}>
+                        <Banknote size={20} color={Colors.text} />
+                        <View style={styles.paymentInfo}>
+                            <Text style={styles.paymentMethodTitle}>Cash on Delivery</Text>
+                            <Text style={styles.paymentMethodDesc}>Pay in cash when your order arrives</Text>
                         </View>
                     </View>
 
-                    {/* Payment Section */}
-                    <View style={styles.sectionHeader}>
-                        <CreditCard size={20} color={Colors.primary} />
-                        <Text style={styles.sectionTitle}>Payment Method</Text>
-                    </View>
-
-                    <View style={styles.paymentContainer}>
-                        <TouchableOpacity
-                            style={[
-                                styles.paymentOption,
-                                paymentMethod === 'cod' && styles.paymentActive
-                            ]}
-                            onPress={() => setPaymentMethod('cod')}
-                            activeOpacity={0.9}
-                        >
-                            <View style={styles.paymentIconContainer}>
-                                <Banknote size={24} color={paymentMethod === 'cod' ? '#fff' : Colors.text} />
-                            </View>
-                            <View style={styles.paymentInfo}>
-                                <Text style={[styles.paymentMethodTitle, paymentMethod === 'cod' && styles.textActive]}>
-                                    Cash on Delivery
-                                </Text>
-                                <Text style={styles.paymentMethodDesc}>Pay when you receive your order</Text>
-                            </View>
-                            <View style={[styles.radio, paymentMethod === 'cod' && styles.radioActive]}>
-                                {paymentMethod === 'cod' && <View style={styles.radioInner} />}
-                            </View>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[
-                                styles.paymentOption,
-                                paymentMethod === 'card' && styles.paymentActive
-                            ]}
-                            onPress={() => setPaymentMethod('card')}
-                            activeOpacity={0.9}
-                        >
-                            <View style={[styles.paymentIconContainer, { backgroundColor: paymentMethod === 'card' ? Colors.text : '#F5F5F5' }]}>
-                                <CreditCard size={24} color={paymentMethod === 'card' ? '#fff' : Colors.text} />
-                            </View>
-                            <View style={styles.paymentInfo}>
-                                <Text style={[styles.paymentMethodTitle, paymentMethod === 'card' && styles.textActive]}>
-                                    Credit Card
-                                </Text>
-                                <Text style={styles.paymentMethodDesc}>Visa, Mastercard, Amex</Text>
-                            </View>
-                            <View style={[styles.radio, paymentMethod === 'card' && styles.radioActive]}>
-                                {paymentMethod === 'card' && <View style={styles.radioInner} />}
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Summary Section */}
+                    {/* Order Summary */}
                     <View style={styles.summaryCard}>
-                        <Text style={styles.paramTitle}>Order Summary</Text>
-
-                        {/* Order Items List */}
+                        <Text style={styles.summaryTitle}>Order Summary</Text>
                         <View style={styles.itemsList}>
                             {items.map((item, index) => (
                                 <View key={index} style={styles.itemRow}>
-                                    <View style={styles.itemImageContainer}>
-                                        {/* Use a placeholder if image is missing or invalid URL */}
-                                        {item.image ? (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <Image
-                                                source={{ uri: item.image }}
-                                                style={styles.itemImage as any}
-                                                resizeMode="cover"
-                                            />
-                                        ) : (
-                                            <ShoppingBag size={20} color={Colors.textLight} />
-                                        )}
-                                        <View style={styles.quantityBadge}>
-                                            <Text style={styles.quantityText}>{item.quantity}</Text>
-                                        </View>
-                                    </View>
+                                    <Image source={{ uri: item.image }} style={styles.itemImage} contentFit="cover" />
                                     <View style={styles.itemDetails}>
                                         <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                                        <Text style={styles.itemVariant}>
-                                            {item.size} • <View style={[styles.colorDot, { backgroundColor: item.color }]} /> {item.color}
-                                        </Text>
-                                        <Text style={styles.itemPrice}>${(item.price * item.quantity).toFixed(2)}</Text>
+                                        <Text style={styles.itemVariant}>{item.size} · Qty {item.quantity}</Text>
                                     </View>
-                                    <TouchableOpacity
-                                        onPress={() => removeFromCart(item.id, item.size, item.color)}
-                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                    >
-                                        <Trash2 size={20} color={Colors.textLight} />
-                                    </TouchableOpacity>
+                                    <Text style={styles.itemPrice}>${(item.price * item.quantity).toFixed(2)}</Text>
                                 </View>
                             ))}
                         </View>
-
                         <View style={styles.divider} />
-
                         <View style={styles.summaryRow}>
                             <Text style={styles.summaryLabel}>Subtotal</Text>
                             <Text style={styles.summaryValue}>${total.toFixed(2)}</Text>
                         </View>
                         <View style={styles.summaryRow}>
                             <Text style={styles.summaryLabel}>Delivery Fee</Text>
-                            <View style={styles.freeBadge}>
-                                <Text style={styles.freeText}>FREE</Text>
-                            </View>
+                            <Text style={styles.summaryValue}>Free</Text>
                         </View>
-
                         <View style={styles.totalRow}>
-                            <View>
-                                <Text style={styles.totalLabel}>Total Amount</Text>
-                                <Text style={styles.totalSub}>Incl. VAT</Text>
-                            </View>
-                            <Text style={styles.totalAmount}>DA {total.toFixed(2)}</Text>
+                            <Text style={styles.totalLabel}>Total</Text>
+                            <Text style={styles.totalAmount}>${total.toFixed(2)}</Text>
                         </View>
-                    </View>
-
-                    {/* Delivery Info */}
-                    <View style={styles.deliveryInfo}>
-                        <Truck size={20} color={Colors.textSecondary} />
-                        <Text style={styles.deliveryText}>
-                            Estimated delivery: <Text style={{ fontWeight: '600', color: Colors.text }}>2-3 business days</Text>
-                        </Text>
                     </View>
 
                     <View style={{ height: 100 }} />
                 </ScrollView>
             </KeyboardAvoidingView>
 
-            {/* Bottom Action Bar */}
             <View style={styles.bottomBar}>
                 <TouchableOpacity
-                    style={[styles.checkoutBtn, loading && styles.btnDisabled]}
+                    style={[styles.placeOrderBtn, (!isAddressComplete || loading) && styles.btnDisabled]}
                     onPress={handlePlaceOrder}
-                    disabled={loading}
+                    disabled={!isAddressComplete || loading}
                 >
-                    <Text style={styles.checkoutBtnText}>
-                        {loading ? 'Processing...' : `Confirm Order • $${total.toFixed(2)}`}
+                    <Text style={styles.placeOrderText}>
+                        {loading ? 'Placing Order…' : `Place Order — $${total.toFixed(2)}`}
                     </Text>
-                    {!loading && <ChevronRight size={20} color="#fff" />}
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -285,373 +216,212 @@ export default function CheckoutScreen({ navigation }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8F9FB',
+        backgroundColor: Colors.background,
     },
     header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
         paddingHorizontal: 20,
-        paddingVertical: 16,
-        backgroundColor: '#fff',
-        borderBottomWidth: 1,
-        borderBottomColor: '#F0F0F0',
+        paddingVertical: 14,
     },
     title: {
-        fontSize: 24,
-        fontWeight: '700',
+        fontFamily: Fonts.serifSemiBold,
+        fontSize: 20,
         color: Colors.text,
-        letterSpacing: -0.5,
-    },
-    stepContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    stepActive: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: Colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    stepText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: '700',
-    },
-    stepLine: {
-        width: 20,
-        height: 2,
-        backgroundColor: '#E0E0E0',
-        marginHorizontal: 4,
     },
     content: {
-        padding: 20,
+        paddingHorizontal: 20,
+        gap: 16,
     },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: 16,
-        marginTop: 8,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
+    field: {},
+    label: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 12,
         color: Colors.text,
     },
-    card: {
-        backgroundColor: '#fff',
-        borderRadius: 20,
-        padding: 20,
-        marginBottom: 24,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 2,
+    input: {
+        height: 46,
+        marginTop: 6,
+        borderWidth: 1.5,
+        borderColor: Colors.borderStrong,
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        fontFamily: Fonts.sansRegular,
+        fontSize: 14,
+        color: Colors.text,
+        backgroundColor: Colors.surface,
     },
-    inputGroup: {
-        marginBottom: 16,
+    textArea: {
+        height: 70,
+        paddingTop: 12,
+        textAlignVertical: 'top',
     },
     row: {
         flexDirection: 'row',
-        gap: 16,
-    },
-    label: {
-        fontSize: 13,
-        color: Colors.textSecondary,
-        marginBottom: 8,
-        fontWeight: '500',
-    },
-    input: {
-        backgroundColor: '#F8F9FB',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        fontSize: 15,
-        color: Colors.text,
-        borderWidth: 1,
-        borderColor: '#EFEFEF',
-    },
-    paymentContainer: {
         gap: 12,
-        marginBottom: 24,
     },
     paymentOption: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
-        padding: 16,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: '#F0F0F0',
-        gap: 16,
-    },
-    paymentActive: {
-        borderColor: Colors.primary,
-        backgroundColor: '#fff',
-        shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 4,
-    },
-    paymentIconContainer: {
-        width: 48,
-        height: 48,
+        gap: 12,
+        borderWidth: 1.5,
+        borderColor: Colors.text,
         borderRadius: 14,
-        backgroundColor: Colors.text,
-        alignItems: 'center',
-        justifyContent: 'center',
+        padding: 14,
+        backgroundColor: Colors.surfaceSunken,
     },
     paymentInfo: {
         flex: 1,
     },
     paymentMethodTitle: {
-        fontSize: 16,
-        fontWeight: '600',
+        fontFamily: Fonts.sansBold,
+        fontSize: 13,
         color: Colors.text,
-        marginBottom: 4,
-    },
-    textActive: {
-        color: Colors.primary,
     },
     paymentMethodDesc: {
-        fontSize: 13,
+        fontFamily: Fonts.sansRegular,
+        fontSize: 12,
         color: Colors.textSecondary,
-    },
-    radio: {
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        borderWidth: 2,
-        borderColor: '#E0E0E0',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    radioActive: {
-        borderColor: Colors.primary,
-    },
-    radioInner: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: Colors.primary,
+        marginTop: 1,
     },
     summaryCard: {
-        backgroundColor: '#fff',
-        borderRadius: 20,
-        padding: 24,
-        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: 16,
+        padding: 16,
+        backgroundColor: Colors.surface,
+        marginTop: 8,
     },
-    paramTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        marginBottom: 20,
-        color: Colors.text,
-    },
-    summaryRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    summaryLabel: {
-        fontSize: 15,
-        color: Colors.textSecondary,
-    },
-    summaryValue: {
+    summaryTitle: {
+        fontFamily: Fonts.serifSemiBold,
         fontSize: 16,
         color: Colors.text,
-        fontWeight: '600',
+        marginBottom: 14,
     },
     itemsList: {
-        marginBottom: 16,
-        gap: 16,
+        gap: 12,
     },
     itemRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
-    },
-    itemImageContainer: {
-        width: 50,
-        height: 50,
-        borderRadius: 8,
-        backgroundColor: '#F5F5F5',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
+        gap: 10,
     },
     itemImage: {
-        width: '100%',
-        height: '100%',
+        width: 44,
+        height: 52,
         borderRadius: 8,
-    },
-    quantityBadge: {
-        position: 'absolute',
-        top: -6,
-        right: -6,
-        backgroundColor: Colors.text,
-        minWidth: 18,
-        height: 18,
-        borderRadius: 9,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 4,
-        borderWidth: 1.5,
-        borderColor: '#fff',
-    },
-    quantityText: {
-        color: '#fff',
-        fontSize: 10,
-        fontWeight: '700',
+        backgroundColor: Colors.surfaceSunken,
     },
     itemDetails: {
         flex: 1,
     },
     itemName: {
-        fontSize: 14,
-        fontWeight: '600',
+        fontFamily: Fonts.sansSemiBold,
+        fontSize: 13,
         color: Colors.text,
-        marginBottom: 2,
     },
     itemVariant: {
-        fontSize: 12,
-        color: Colors.textSecondary,
-        marginBottom: 2,
-    },
-    colorDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-    },
-    itemPrice: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: Colors.primary,
-    },
-    divider: {
-        height: 1,
-        backgroundColor: '#F0F0F0',
-        marginVertical: 16,
-    },
-    freeBadge: {
-        backgroundColor: '#E7F9ED',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 100,
-    },
-    freeText: {
-        color: '#22C55E',
-        fontSize: 12,
-        fontWeight: '700',
-    },
-    totalRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: 16,
-        paddingTop: 16,
-        borderTopWidth: 1,
-        borderTopColor: '#F0F0F0',
-    },
-    totalLabel: {
-        fontSize: 14,
-        color: Colors.textSecondary,
-    },
-    totalSub: {
+        fontFamily: Fonts.sansRegular,
         fontSize: 12,
         color: Colors.textLight,
         marginTop: 2,
     },
-    totalAmount: {
-        fontSize: 24,
-        fontWeight: '800',
+    itemPrice: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 13,
         color: Colors.text,
     },
-    deliveryInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        marginBottom: 20,
+    divider: {
+        height: 1,
+        backgroundColor: Colors.border,
+        marginVertical: 14,
     },
-    deliveryText: {
+    summaryRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    summaryLabel: {
+        fontFamily: Fonts.sansRegular,
+        fontSize: 13,
         color: Colors.textSecondary,
+    },
+    summaryValue: {
+        fontFamily: Fonts.sansRegular,
+        fontSize: 13,
+        color: Colors.textSecondary,
+    },
+    totalRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 4,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+    },
+    totalLabel: {
+        fontFamily: Fonts.sansBold,
         fontSize: 14,
+        color: Colors.text,
+    },
+    totalAmount: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 16,
+        color: Colors.text,
     },
     bottomBar: {
         position: 'absolute',
-        bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: '#fff',
+        bottom: 0,
         padding: 20,
+        paddingBottom: 34,
+        backgroundColor: 'rgba(255,255,255,0.94)',
         borderTopWidth: 1,
-        borderTopColor: '#F0F0F0',
-        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+        borderTopColor: Colors.border,
     },
-    checkoutBtn: {
+    placeOrderBtn: {
+        height: 52,
+        borderRadius: 26,
         backgroundColor: Colors.text,
-        flexDirection: 'row',
-        alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 18,
-        borderRadius: 16,
-        gap: 8,
-        shadowColor: Colors.text,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 10,
-        elevation: 5,
+        alignItems: 'center',
     },
     btnDisabled: {
-        opacity: 0.7,
+        opacity: 0.5,
     },
-    checkoutBtnText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: '700',
+    placeOrderText: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 14,
+        color: Colors.darkText,
     },
     emptyContainer: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
         padding: 40,
-    },
-    emptyIconContainer: {
-        width: 100,
-        height: 100,
-        backgroundColor: '#F5F5F5',
-        borderRadius: 50,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 24,
+        gap: 12,
+        marginTop: -60,
     },
     emptyTitle: {
-        fontSize: 24,
-        fontWeight: '700',
+        fontFamily: Fonts.serifSemiBold,
+        fontSize: 18,
         color: Colors.text,
-        marginBottom: 8,
     },
     emptyText: {
-        fontSize: 16,
-        color: Colors.textSecondary,
+        fontFamily: Fonts.sansRegular,
+        fontSize: 14,
+        color: Colors.textLight,
         textAlign: 'center',
-        marginBottom: 32,
     },
-    continueBtn: {
+    emptyCta: {
         backgroundColor: Colors.text,
-        paddingHorizontal: 32,
-        paddingVertical: 16,
-        borderRadius: 100,
+        paddingHorizontal: 22,
+        paddingVertical: 13,
+        borderRadius: 23,
+        marginTop: 6,
     },
-    continueBtnText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
-    }
+    emptyCtaText: {
+        fontFamily: Fonts.sansBold,
+        color: Colors.darkText,
+        fontSize: 13,
+    },
 });

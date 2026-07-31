@@ -72,7 +72,6 @@ export function SavedTryOnProvider({ children }: { children: ReactNode }) {
             const res = await saveLook(lookData);
             if (res.success) {
                 fetchItems(); // Refresh list
-                Alert.alert('Success', 'Look saved to your collection!');
             }
         } catch (error: any) {
             console.error('Failed to save look', error);

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Layout from './layouts/Layout';
@@ -11,10 +12,23 @@ import Heroes from './pages/Heroes';
 import HeroForm from './pages/HeroForm';
 import Categories from './pages/Categories';
 import CategoryForm from './pages/CategoryForm';
+import { getToken } from './api/authToken';
 
 const PrivateRoute = ({ children }: { children: ReactNode }) => {
-  const token = localStorage.getItem('token');
-  return token ? children : <Navigate to="/login" />;
+  const [status, setStatus] = useState<'loading' | 'authed' | 'unauthed'>('loading');
+
+  useEffect(() => {
+    let mounted = true;
+    getToken().then((token) => {
+      if (mounted) setStatus(token ? 'authed' : 'unauthed');
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (status === 'loading') return null;
+  return status === 'authed' ? children : <Navigate to="/login" />;
 };
 
 function App() {

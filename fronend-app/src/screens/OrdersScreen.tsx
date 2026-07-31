@@ -1,16 +1,24 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '../constants/Styles';
+import { Colors, Fonts } from '../constants/Styles';
 import { getMyOrders } from '../api/orders';
-import { useFocusEffect } from '@react-navigation/native';
-import { Truck, CheckCircle, Package, Clock, ChevronRight } from 'lucide-react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { Truck, CheckCircle, Package, ChevronLeft } from 'lucide-react-native';
 
 const STEPS = [
     { key: 'processing', label: 'Processing', icon: Package },
     { key: 'shipped', label: 'Shipped', icon: Truck },
     { key: 'delivered', label: 'Delivered', icon: CheckCircle },
 ];
+
+// Matches the design's order status pill treatment.
+const STATUS_STYLE: Record<string, { color: string; bg: string; label: string }> = {
+    Delivered: { color: '#4B5C3E', bg: '#E7EADF', label: 'Delivered' },
+    Shipped: { color: '#7A5B23', bg: '#F3E6CC', label: 'In Transit' },
+    Processing: { color: Colors.textSecondary, bg: Colors.surfaceSunken, label: 'Processing' },
+};
 
 const OrderTimeline = ({ status, isDelivered }: { status: string, isDelivered: boolean }) => {
     // Determine current step index
@@ -44,7 +52,7 @@ const OrderTimeline = ({ status, isDelivered }: { status: string, isDelivered: b
                             ]}>
                                 <step.icon
                                     size={12}
-                                    color={isActive ? '#fff' : Colors.textLight}
+                                    color={isActive ? Colors.darkText : Colors.textLight}
                                 />
                             </View>
                             <Text style={[styles.stepLabel, isActive && styles.stepLabelActive]}>
@@ -59,6 +67,7 @@ const OrderTimeline = ({ status, isDelivered }: { status: string, isDelivered: b
 };
 
 export default function OrdersScreen() {
+    const navigation = useNavigation<any>();
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -91,34 +100,36 @@ export default function OrdersScreen() {
         const date = new Date(item.createdAt).toLocaleDateString(undefined, {
             year: 'numeric', month: 'short', day: 'numeric'
         });
-        const firstImage = item.orderItems?.[0]?.image || 'https://via.placeholder.com/150';
+        const statusKey = item.isDelivered ? 'Delivered' : (item.status || 'Processing');
+        const statusStyle = STATUS_STYLE[statusKey] || STATUS_STYLE.Processing;
 
         return (
             <View style={styles.card}>
                 <View style={styles.cardHeader}>
                     <Text style={styles.orderId}>Order #{item._id.slice(-6).toUpperCase()}</Text>
-                    <View style={styles.statusBadge}>
-                        <Text style={[styles.statusText, item.isDelivered && styles.textSuccess]}>
-                            {item.isDelivered ? 'Complete' : (item.status || 'Processing')}
+                    <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+                        <Text style={[styles.statusText, { color: statusStyle.color }]}>
+                            {statusStyle.label}
                         </Text>
                     </View>
                 </View>
 
-                <View style={styles.cardContent}>
-                    <Image source={{ uri: firstImage }} style={styles.itemImage} />
-                    <View style={styles.details}>
-                        <Text style={styles.date}>Placed on {date}</Text>
-                        <Text style={styles.itemsInfo}>{item.orderItems?.length} items • ${item.totalPrice}</Text>
-                        {item.trackingNumber && (
-                            <Text style={styles.tracking}>Track: {item.trackingNumber}</Text>
-                        )}
-                    </View>
-                    <ChevronRight color={Colors.textLight} size={20} />
+                <Text style={styles.date}>{date} · {item.orderItems?.length} {item.orderItems?.length === 1 ? 'item' : 'items'}</Text>
+
+                <View style={styles.thumbsRow}>
+                    {(item.orderItems || []).slice(0, 4).map((oi: any, idx: number) => (
+                        <Image key={idx} source={{ uri: oi.image }} style={styles.itemThumb} contentFit="cover" />
+                    ))}
                 </View>
 
                 {/* Progress Timeline */}
                 <View style={styles.timelineSection}>
                     <OrderTimeline status={item.status} isDelivered={item.isDelivered} />
+                </View>
+
+                <View style={styles.totalRow}>
+                    <Text style={styles.totalLabel}>Total</Text>
+                    <Text style={styles.totalValue}>${item.totalPrice}</Text>
                 </View>
             </View>
         );
@@ -135,6 +146,9 @@ export default function OrdersScreen() {
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <ChevronLeft size={20} color={Colors.text} />
+                </TouchableOpacity>
                 <Text style={styles.headerTitle}>My Orders</Text>
             </View>
 
@@ -145,11 +159,11 @@ export default function OrdersScreen() {
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
                 }
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
-                        <Package size={64} color={Colors.textLight} />
+                        <Package size={40} color={Colors.borderStrong} />
                         <Text style={styles.emptyText}>No orders yet</Text>
                         <Text style={styles.emptySubtext}>Looks like you haven't placed any orders.</Text>
                     </View>
@@ -168,15 +182,29 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    header: {
-        paddingHorizontal: 20,
-        paddingVertical: 16,
         backgroundColor: Colors.background,
     },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        backgroundColor: Colors.background,
+    },
+    backButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: Colors.surface,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     headerTitle: {
-        fontSize: 28,
-        fontWeight: '700',
+        fontFamily: Fonts.serifSemiBold,
+        fontSize: 20,
         color: Colors.text,
     },
     listContent: {
@@ -184,79 +212,54 @@ const styles = StyleSheet.create({
         paddingBottom: 24,
     },
     card: {
-        backgroundColor: '#fff',
+        backgroundColor: Colors.surface,
         borderRadius: 16,
         padding: 16,
-        marginBottom: 16,
-        shadowColor: Colors.shadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 3,
+        marginBottom: 14,
         borderWidth: 1,
-        borderColor: '#f0f0f0',
+        borderColor: Colors.border,
     },
     cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16,
     },
     orderId: {
-        fontSize: 16,
-        fontWeight: '700',
+        fontFamily: Fonts.sansBold,
+        fontSize: 13,
         color: Colors.text,
     },
     statusBadge: {
-        backgroundColor: '#F5F5F5',
         paddingHorizontal: 10,
         paddingVertical: 4,
-        borderRadius: 8,
+        borderRadius: 12,
     },
     statusText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: Colors.text,
-    },
-    textSuccess: {
-        color: 'green',
-    },
-    cardContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    itemImage: {
-        width: 56,
-        height: 56,
-        borderRadius: 10,
-        backgroundColor: '#f5f5f5',
-    },
-    details: {
-        flex: 1,
-        marginLeft: 14,
-        justifyContent: 'center',
+        fontFamily: Fonts.sansBold,
+        fontSize: 11,
     },
     date: {
+        fontFamily: Fonts.sansRegular,
         fontSize: 12,
         color: Colors.textLight,
-        marginBottom: 4,
-    },
-    itemsInfo: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.text,
-    },
-    tracking: {
-        fontSize: 12,
-        color: Colors.secondary,
         marginTop: 4,
     },
+    thumbsRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 12,
+    },
+    itemThumb: {
+        width: 44,
+        height: 52,
+        borderRadius: 8,
+        backgroundColor: Colors.surfaceSunken,
+    },
     timelineSection: {
-        marginTop: 8,
+        marginTop: 16,
         paddingTop: 16,
         borderTopWidth: 1,
-        borderTopColor: '#f5f5f5',
+        borderTopColor: Colors.border,
     },
     timelineContainer: {
         position: 'relative',
@@ -276,35 +279,36 @@ const styles = StyleSheet.create({
         width: 24,
         height: 24,
         borderRadius: 12,
-        backgroundColor: '#eee',
+        backgroundColor: Colors.surfaceSunken,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 8,
         borderWidth: 2,
-        borderColor: '#fff',
+        borderColor: Colors.surface,
     },
     stepDotActive: {
-        backgroundColor: Colors.secondary,
+        backgroundColor: Colors.primary,
     },
     stepDotCompleted: {
-        backgroundColor: Colors.primary, // or secondary
+        backgroundColor: Colors.text,
     },
     stepLabel: {
+        fontFamily: Fonts.sansMedium,
         fontSize: 10,
         color: Colors.textLight,
         textAlign: 'center',
     },
     stepLabelActive: {
+        fontFamily: Fonts.sansBold,
         color: Colors.text,
-        fontWeight: '600',
     },
     lineBase: {
         position: 'absolute',
-        top: 11, // half of dot height (24/2) minus half line height (2/2) roughly
+        top: 11,
         left: 30,
         right: 30,
         height: 2,
-        backgroundColor: '#eee',
+        backgroundColor: Colors.surfaceSunken,
         zIndex: 1,
     },
     lineProgress: {
@@ -312,22 +316,42 @@ const styles = StyleSheet.create({
         top: 11,
         left: 30,
         height: 2,
-        backgroundColor: Colors.secondary,
+        backgroundColor: Colors.primary,
         zIndex: 1,
+    },
+    totalRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+    },
+    totalLabel: {
+        fontFamily: Fonts.sansRegular,
+        fontSize: 12,
+        color: Colors.textSecondary,
+    },
+    totalValue: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 15,
+        color: Colors.text,
     },
     emptyContainer: {
         alignItems: 'center',
-        marginTop: 60,
+        gap: 10,
+        marginTop: 80,
     },
     emptyText: {
-        fontSize: 20,
-        fontWeight: '600',
+        fontFamily: Fonts.serifSemiBold,
+        fontSize: 18,
         color: Colors.text,
-        marginTop: 16,
+        marginTop: 6,
     },
     emptySubtext: {
-        fontSize: 14,
+        fontFamily: Fonts.sansRegular,
+        fontSize: 13,
         color: Colors.textLight,
-        marginTop: 8,
     }
 });

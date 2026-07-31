@@ -22,7 +22,7 @@ export default function RegisterScreen() {
         try {
             await register(name, email, password);
             navigation.navigate('MainTabs', { screen: 'Profile' });
-        } catch (error) {
+        } catch {
             // Error handled in AuthContext
         } finally {
             setLoading(false);

@@ -1,65 +1,128 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Dimensions, Alert, TextInput, LayoutAnimation, Platform, UIManager } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Star, ShoppingCart, ArrowRight, Heart, Check, Trash } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Colors } from '../constants/Styles';
-import { getProduct, getRelatedProducts } from '../api/products';
-import { toggleWishlist } from '../api/auth';
-import { getReviews, addReview, deleteReview } from '../api/reviews';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Alert, TextInput, LayoutAnimation, Platform, UIManager, Animated, Easing, Modal, Pressable } from 'react-native';
+import { Image } from 'expo-image';
+import { BlurView } from 'expo-blur';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Star, ShoppingCart, Heart, Check, Trash, ChevronLeft } from 'lucide-react-native';
+import { Colors, Fonts } from '../constants/Styles';
+import { toggleWishlist, getMe } from '../api/auth';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useProduct, useRelatedProducts, useReviews, useAddReview, useDeleteReview } from '../hooks/useProductDetails';
+import { Review } from '../types';
 
 const { width, height } = Dimensions.get('window');
+const GALLERY_HEIGHT = height * 0.52;
+
+// review.user comes back as either a populated { _id, name } or a bare id
+// string depending on the endpoint/population state.
+const getReviewUserId = (review: Review): string | undefined =>
+    typeof review.user === 'string' ? review.user : review.user?._id;
+
+const getReviewUserName = (review: Review): string | undefined =>
+    typeof review.user === 'string' ? undefined : review.user?.name;
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+const StarRating = ({ value, size = 12 }: { value: number; size?: number }) => (
+    <View style={{ flexDirection: 'row', gap: 2 }}>
+        {[1, 2, 3, 4, 5].map((n) => (
+            <Star key={n} size={size} fill={n <= Math.round(value) ? Colors.accent : 'transparent'} stroke={Colors.accent} />
+        ))}
+    </View>
+);
+
 export default function ProductDetailsScreen({ route, navigation }: any) {
-    const { product } = route.params || {};
-    const [selectedSize, setSelectedSize] = useState(product?.sizes?.[0] || '');
-    const [selectedColor, setSelectedColor] = useState(product?.colors?.[0] || '');
+    const { product: passedProduct, productId } = route.params || {};
+    const id = passedProduct?._id || productId;
+
+    const { data: product, isLoading: productLoading } = useProduct(id, passedProduct);
+    const { data: relatedProducts = [] } = useRelatedProducts(product?._id);
+    const { data: reviews = [] } = useReviews(product?._id);
+    const addReviewMutation = useAddReview(product?._id);
+    const deleteReviewMutation = useDeleteReview(product?._id);
+
+    const [selectedSize, setSelectedSize] = useState(passedProduct?.sizes?.[0] || '');
+    const [selectedColor, setSelectedColor] = useState(passedProduct?.colors?.[0] || '');
     const [activeSlide, setActiveSlide] = useState(0);
-    const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
-    const [isWishlisted, setIsWishlisted] = useState(false);
-    const [reviews, setReviews] = useState<any[]>([]);
-    const [showReviewForm, setShowReviewForm] = useState(false);
+    const [reviewSheetOpen, setReviewSheetOpen] = useState(false);
     const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
-    const [isAdded, setIsAdded] = useState(false); // New state for animation
+    const [isAdded, setIsAdded] = useState(false);
+
+    const galleryRef = useRef<ScrollView>(null);
+    const heartScale = useRef(new Animated.Value(1)).current;
+    const addPulse = useRef(new Animated.Value(1)).current;
 
     const { user } = useAuth();
-
     const { addToCart } = useCart();
+    const queryClient = useQueryClient();
 
+    // Shares the exact ['user', 'me'] cache WishlistScreen reads, seeded from
+    // AuthContext's already-loaded user so there's no loading flash. Toggling
+    // here writes through the same cache entry, so the Wishlist screen shows
+    // the change immediately instead of only after its own refetch/restart.
+    const { data: meData } = useQuery({
+        queryKey: ['user', 'me'],
+        queryFn: async () => (await getMe()).data,
+        initialData: user ?? undefined,
+        enabled: !!user,
+    });
+
+    const isWishlisted = !!product && (meData?.wishlist?.some((p: any) => (p?._id ?? p) === product._id) ?? false);
+
+    // Reset the size/color selectors whenever we land on a (possibly
+    // different) product, e.g. pushing into a related product's details.
     useEffect(() => {
-        if (product?._id) {
-            fetchData();
+        if (product) {
+            setSelectedSize(product.sizes?.[0] || '');
+            setSelectedColor(product.colors?.[0] || '');
+            setActiveSlide(0);
         }
     }, [product?._id]);
 
-    const fetchData = async () => {
-        try {
-            const [related, productReviews] = await Promise.all([
-                getRelatedProducts(product._id),
-                getReviews(product._id)
-            ]);
-
-            setRelatedProducts(related.data || []);
-            setReviews(productReviews.data || []);
-
-            // Check if wishlisted using context user
-            if (user) {
-                const isFav = user.wishlist && user.wishlist.some((p: any) => p._id === product._id || p === product._id);
-                setIsWishlisted(!!isFav);
-            }
-
-        } catch (error) {
-            console.error('Failed to fetch data', error);
-        }
+    const pulseHeart = () => {
+        heartScale.setValue(1);
+        Animated.sequence([
+            Animated.timing(heartScale, { toValue: 1.4, duration: 120, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+            Animated.timing(heartScale, { toValue: 0.9, duration: 100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+            Animated.timing(heartScale, { toValue: 1, duration: 120, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+        ]).start();
     };
 
-    const handleToggleWishlist = async () => {
+    const toggleWishlistMutation = useMutation({
+        mutationFn: (productId: string) => toggleWishlist(productId),
+        onMutate: async (productId: string) => {
+            await queryClient.cancelQueries({ queryKey: ['user', 'me'] });
+            const previousMe = queryClient.getQueryData(['user', 'me']);
+
+            queryClient.setQueryData(['user', 'me'], (old: any) => {
+                if (!old) return old;
+                const exists = old.wishlist?.some((p: any) => (p?._id ?? p) === productId);
+                return {
+                    ...old,
+                    wishlist: exists
+                        ? old.wishlist.filter((p: any) => (p?._id ?? p) !== productId)
+                        // We have the full product object on this screen, so unlike
+                        // WishlistScreen's own toggle, adding can be optimistic too.
+                        : [...(old.wishlist || []), product],
+                };
+            });
+
+            return { previousMe };
+        },
+        onError: (_err, _productId, context) => {
+            if (context?.previousMe) {
+                queryClient.setQueryData(['user', 'me'], context.previousMe);
+            }
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ['user', 'me'] });
+        },
+    });
+
+    const handleToggleWishlist = () => {
         if (!user) {
             Alert.alert(
                 "Login Required",
@@ -71,17 +134,19 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
             );
             return;
         }
-        try {
-            setIsWishlisted(!isWishlisted); // Optimistic update
-            await toggleWishlist(product._id);
-        } catch (error) {
-            setIsWishlisted(!isWishlisted); // Revert
-            console.error(error);
-        }
+        if (!product) return;
+        pulseHeart();
+        toggleWishlistMutation.mutate(product._id);
+    };
+
+    const openReviewSheet = () => {
+        setNewReview({ rating: 5, comment: '' });
+        setReviewSheetOpen(true);
     };
 
     const handleSubmitReview = async () => {
         if (!user) {
+            setReviewSheetOpen(false);
             Alert.alert(
                 "Login Required",
                 "Please login to write a review",
@@ -93,18 +158,14 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
             return;
         }
 
+        if (!newReview.comment) {
+            Alert.alert('Error', 'Please add a comment');
+            return;
+        }
+
         try {
-            if (!newReview.comment) {
-                Alert.alert('Error', 'Please add a comment');
-                return;
-            }
-            await addReview(product._id, newReview);
-            Alert.alert('Success', 'Review added!');
-            setNewReview({ rating: 5, comment: '' });
-            setShowReviewForm(false);
-            // Refresh reviews
-            const res = await getReviews(product._id);
-            setReviews(res.data);
+            await addReviewMutation.mutateAsync(newReview);
+            setReviewSheetOpen(false);
         } catch (error: any) {
             const message = error.response?.data?.error || 'Failed to add review';
             Alert.alert('Error', message);
@@ -122,9 +183,7 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            await deleteReview(reviewId);
-                            setReviews(reviews.filter(r => r._id !== reviewId));
-                            Alert.alert("Success", "Review deleted successfully");
+                            await deleteReviewMutation.mutateAsync(reviewId);
                         } catch (error: any) {
                             const message = error.response?.data?.error || 'Failed to delete review';
                             Alert.alert('Error', message);
@@ -135,24 +194,39 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
         );
     };
 
-
     const handleAddToCart = () => {
         if (isAdded) {
             navigation.navigate('Cart' as never);
             return;
         }
+        if (!product) return;
 
         addToCart(product, selectedSize, selectedColor);
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setIsAdded(true);
-
-        // Optional: Reset state after 3 seconds if you want them to be able to add again easily
-        // But requested flow is: click -> animate -> click again -> go to cart
-        // So we keep it until they leave or maybe reset if they change options?
-        // For now, let's keep it simple as requested.
+        addPulse.setValue(1);
+        Animated.sequence([
+            Animated.timing(addPulse, { toValue: 0.95, duration: 90, useNativeDriver: true }),
+            Animated.timing(addPulse, { toValue: 1, duration: 160, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+        ]).start();
     };
 
+    const goToSlide = (index: number) => {
+        setActiveSlide(index);
+        galleryRef.current?.scrollTo({ x: index * width, animated: true });
+    };
+
+    if (productLoading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <Text style={{ color: Colors.textSecondary, fontFamily: Fonts.sansRegular }}>Loading...</Text>
+            </View>
+        );
+    }
+
     if (!product) return null;
+
+    const galleryImages = product.images && product.images.length > 0 ? product.images : [product.image];
 
     return (
         <View style={styles.container}>
@@ -160,31 +234,69 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
                 {/* Gallery */}
                 <View style={styles.imageContainer}>
                     <ScrollView
+                        ref={galleryRef}
                         horizontal
                         pagingEnabled
                         showsHorizontalScrollIndicator={false}
                         onScroll={(e) => {
-                            const slide = Math.ceil(e.nativeEvent.contentOffset.x / e.nativeEvent.layoutMeasurement.width);
-                            if (slide !== activeSlide) {
-                                setActiveSlide(slide);
-                            }
+                            const slide = Math.round(e.nativeEvent.contentOffset.x / width);
+                            if (slide !== activeSlide) setActiveSlide(slide);
                         }}
                         scrollEventThrottle={16}
                     >
-                        {(product.images && product.images.length > 0 ? product.images : [product.image]).map((img: string, index: number) => (
+                        {galleryImages.map((img: string, index: number) => (
                             <Image
                                 key={index}
                                 source={{ uri: img }}
                                 style={styles.image}
+                                contentFit="cover"
+                                placeholder={require('../../assets/icon.png')}
                             />
                         ))}
                     </ScrollView>
-                    <LinearGradient
-                        colors={['transparent', 'rgba(0,0,0,0.4)']}
-                        style={styles.paginationContainer}
-                    >
+
+                    {/* Tap zones for prev/next, mirroring the design's split-image nav */}
+                    {galleryImages.length > 1 && (
+                        <>
+                            <Pressable
+                                style={styles.galleryTapZoneLeft}
+                                onPress={() => goToSlide(Math.max(0, activeSlide - 1))}
+                            />
+                            <Pressable
+                                style={styles.galleryTapZoneRight}
+                                onPress={() => goToSlide(Math.min(galleryImages.length - 1, activeSlide + 1))}
+                            />
+                        </>
+                    )}
+
+                    <View style={[styles.glassButton, styles.backButtonFloating]}>
+                        <BlurView intensity={40} tint="light" style={StyleSheet.absoluteFill} />
+                        <TouchableOpacity style={styles.glassButtonTouch} onPress={() => navigation.goBack()}>
+                            <ChevronLeft size={20} color={Colors.text} />
+                        </TouchableOpacity>
+                    </View>
+
+                    <Animated.View style={[styles.glassButton, styles.wishlistButtonFloating, { transform: [{ scale: heartScale }] }]}>
+                        <BlurView intensity={40} tint="light" style={StyleSheet.absoluteFill} />
+                        <TouchableOpacity
+                            style={styles.glassButtonTouch}
+                            onPress={handleToggleWishlist}
+                            testID="wishlist-toggle-button"
+                            accessibilityRole="button"
+                            accessibilityLabel={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+                            accessibilityState={{ selected: isWishlisted }}
+                        >
+                            <Heart
+                                size={17}
+                                color={Colors.text}
+                                fill={isWishlisted ? Colors.secondary : 'transparent'}
+                            />
+                        </TouchableOpacity>
+                    </Animated.View>
+
+                    {galleryImages.length > 1 && (
                         <View style={styles.pagination}>
-                            {(product.images && product.images.length > 0 ? product.images : [product.image]).map((_: any, index: number) => (
+                            {galleryImages.map((_: string, index: number) => (
                                 <View
                                     key={index}
                                     style={[
@@ -194,26 +306,16 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
                                 />
                             ))}
                         </View>
-                    </LinearGradient>
+                    )}
                 </View>
 
                 {/* Info */}
                 <View style={styles.content}>
-                    <View style={styles.headerRow}>
-                        <Text style={styles.title}>{product.name}</Text>
-                        <TouchableOpacity onPress={handleToggleWishlist}>
-                            <Heart
-                                size={27}
-                                color={Colors.primary}
-                                fill={isWishlisted ? Colors.primary : 'transparent'}
-                            />
-                        </TouchableOpacity>
-                    </View>
+                    <Text style={styles.title}>{product.name}</Text>
                     <View style={styles.ratingRow}>
-                        <View style={styles.ratingContainer}>
-                            <Star fill={Colors.accent} stroke={Colors.accent} size={16} />
-                            <Text style={styles.ratingText}>{product.rating} ({reviews.length} reviews)</Text>
-                        </View>
+                        <StarRating value={product.rating || 0} size={14} />
+                        <Text style={styles.ratingNum}>{(product.rating || 0).toFixed(1)}</Text>
+                        <Text style={styles.ratingCount}>· {reviews.length} reviews</Text>
                     </View>
 
                     <View style={styles.priceRow}>
@@ -228,126 +330,57 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
                     </Text>
 
                     {/* Color Selector */}
-                    <Text style={styles.sectionTitle}>Color</Text>
-                    <View style={styles.selectorRow}>
-                        {product.colors && product.colors.length > 0 ? (
-                            product.colors.map((color: string, index: number) => (
-                                <TouchableOpacity
-                                    key={index}
-                                    style={[
-                                        styles.colorOption,
-                                        { backgroundColor: color },
-                                        selectedColor === color && styles.colorSelected
-                                    ]}
-                                    onPress={() => setSelectedColor(color)}
-                                />
-                            ))
-                        ) : (
-                            <Text style={styles.description}>No colors available</Text>
-                        )}
-                    </View>
+                    {product.colors && product.colors.length > 0 && (
+                        <View style={styles.selectorGroup}>
+                            <Text style={styles.sectionLabel}>
+                                Color — <Text style={styles.sectionLabelValue}>{selectedColor || product.colors[0]}</Text>
+                            </Text>
+                            <View style={styles.colorRow}>
+                                {product.colors.map((color: string, index: number) => {
+                                    const selected = selectedColor === color;
+                                    return (
+                                        <TouchableOpacity
+                                            key={index}
+                                            style={[styles.colorRing, selected && styles.colorRingSelected]}
+                                            onPress={() => setSelectedColor(color)}
+                                        >
+                                            <View style={[styles.colorSwatch, { backgroundColor: color }]} />
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
+                    )}
 
                     {/* Size Selector */}
-                    <Text style={styles.sectionTitle}>Size</Text>
-                    <View style={styles.selectorRow}>
-                        {product.sizes && product.sizes.length > 0 ? (
-                            product.sizes.map((size: string, index: number) => (
-                                <TouchableOpacity
-                                    key={index}
-                                    style={[
-                                        styles.sizeOption,
-                                        selectedSize === size && styles.sizeSelected
-                                    ]}
-                                    onPress={() => setSelectedSize(size)}
-                                >
-                                    <Text style={[
-                                        styles.sizeText,
-                                        selectedSize === size && styles.sizeTextSelected
-                                    ]}>{size}</Text>
-                                </TouchableOpacity>
-                            ))
-                        ) : (
-                            <Text style={styles.description}>No sizes available</Text>
-                        )}
-                    </View>
-
-                    {/* Points Info */}
-                    <View style={styles.pointsInfo}>
-                        <Text style={styles.pointsText}>✨ Buy now and earn +20 points</Text>
-                    </View>
-                    {/* Reviews Section */}
-                    <View style={styles.reviewsSection}>
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>Reviews ({reviews.length})</Text>
-                            <TouchableOpacity onPress={() => setShowReviewForm(!showReviewForm)}>
-                                <Text style={styles.writeReviewText}>Write a Review</Text>
-                            </TouchableOpacity>
+                    {product.sizes && product.sizes.length > 0 && (
+                        <View style={styles.selectorGroup}>
+                            <Text style={styles.sectionLabel}>Size</Text>
+                            <View style={styles.sizeRow}>
+                                {product.sizes.map((size: string, index: number) => (
+                                    <TouchableOpacity
+                                        key={index}
+                                        style={[
+                                            styles.sizeOption,
+                                            selectedSize === size && styles.sizeSelected
+                                        ]}
+                                        onPress={() => setSelectedSize(size)}
+                                    >
+                                        <Text style={[
+                                            styles.sizeText,
+                                            selectedSize === size && styles.sizeTextSelected
+                                        ]}>{size}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
                         </View>
+                    )}
 
-                        {showReviewForm && (
-                            <View style={styles.reviewForm}>
-                                <Text style={styles.formLabel}>Rating: {newReview.rating}/5</Text>
-                                <View style={styles.starsRow}>
-                                    {[1, 2, 3, 4, 5].map((s) => (
-                                        <TouchableOpacity key={s} onPress={() => setNewReview({ ...newReview, rating: s })}>
-                                            <Star
-                                                size={24}
-                                                fill={s <= newReview.rating ? Colors.accent : 'transparent'}
-                                                stroke={Colors.accent}
-                                            />
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                                <TextInput
-                                    style={styles.reviewInput}
-                                    placeholder="Share your thoughts..."
-                                    multiline
-                                    value={newReview.comment}
-                                    onChangeText={(text) => setNewReview({ ...newReview, comment: text })}
-                                />
-                                <TouchableOpacity style={styles.submitReviewButton} onPress={handleSubmitReview}>
-                                    <Text style={styles.submitReviewText}>Submit Review</Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
-
-                        {/* We need Text Input import. Let's add it to the top import first in next step or assume standard React Native import */}
-                        {/* Display Reviews */}
-                        {reviews.map((review, index) => (
-                            <View key={index} style={styles.reviewCard}>
-                                <View style={styles.reviewHeader}>
-                                    <Text style={styles.reviewerName}>{review.user?.name || 'User'}</Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                        <Text style={styles.reviewDate}>{new Date(review.createdAt).toLocaleDateString()}</Text>
-                                        {user && (user._id === review.user?._id || user._id === review.user) && (
-                                            <TouchableOpacity onPress={() => handleDeleteReview(review._id)}>
-                                                <Trash size={14} color={Colors.error || '#FF0000'} />
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
-                                </View>
-                                <View style={styles.starRowSmall}>
-                                    {[...Array(5)].map((_, i) => (
-                                        <Star
-                                            key={i}
-                                            size={12}
-                                            fill={i < review.rating ? Colors.accent : 'transparent'}
-                                            stroke={Colors.accent}
-                                        />
-                                    ))}
-                                </View>
-                                <Text style={styles.reviewComment}>{review.comment}</Text>
-                            </View>
-                        ))}
-                    </View>
-
-                    {/* Similar Products */}
-                    {/* Similar Products */}
+                    {/* Style Inspiration */}
                     {relatedProducts.length > 0 && (
                         <View style={styles.similarSection}>
-                            <View style={styles.sectionTitleContainer}>
-                                <Text style={styles.sectionTitle}>Style Inspiration</Text>
-                            </View>
+                            <Text style={styles.sectionHeading}>Style Inspiration</Text>
+                            <Text style={styles.sectionSubheading}>Complete the look</Text>
                             <View style={styles.gridContainer}>
                                 {relatedProducts.map((item) => (
                                     <TouchableOpacity
@@ -356,23 +389,42 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
                                         onPress={() => navigation.push('ProductDetails', { product: item })}
                                         activeOpacity={0.9}
                                     >
-                                        <Image source={{ uri: item.image }} style={styles.similarImage} />
-                                        <View style={styles.similarInfoContainer}>
-                                            <View style={styles.similarInfo}>
-                                                <Text style={styles.similarTitle} numberOfLines={1}>{item.name}</Text>
-                                            </View>
-                                            <Text style={styles.similarPrice}>DA{item.price}</Text>
-
-                                            <View style={styles.shopNowButton}>
-                                                <Text style={styles.shopNowText}>Shop Now</Text>
-                                                <ArrowRight size={14} color={Colors.textSecondary} />
-                                            </View>
-                                        </View>
+                                        <Image source={{ uri: item.image }} style={styles.similarImage} contentFit="cover" />
+                                        <Text style={styles.similarTitle} numberOfLines={1}>{item.name}</Text>
+                                        <Text style={styles.similarPrice}>${item.price}</Text>
                                     </TouchableOpacity>
                                 ))}
                             </View>
                         </View>
                     )}
+
+                    {/* Reviews Section */}
+                    <View style={styles.reviewsSection}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionHeading}>Reviews</Text>
+                            <TouchableOpacity onPress={openReviewSheet}>
+                                <Text style={styles.writeReviewText}>Write a review</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {reviews.map((review, index) => (
+                            <View key={index} style={styles.reviewCard}>
+                                <View style={styles.reviewHeader}>
+                                    <Text style={styles.reviewerName}>{getReviewUserName(review) || 'User'}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                        <Text style={styles.reviewDate}>{review.createdAt ? new Date(review.createdAt).toLocaleDateString() : ''}</Text>
+                                        {user && user._id === getReviewUserId(review) && (
+                                            <TouchableOpacity onPress={() => handleDeleteReview(review._id)}>
+                                                <Trash size={14} color={Colors.error} />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                </View>
+                                <StarRating value={review.rating} />
+                                <Text style={styles.reviewComment}>{review.comment}</Text>
+                            </View>
+                        ))}
+                    </View>
                 </View>
             </ScrollView>
 
@@ -387,25 +439,62 @@ export default function ProductDetailsScreen({ route, navigation }: any) {
                         })}
                     >
                         <Text style={styles.tryOnButtonText}>Try it on me</Text>
-                        <ArrowRight size={16} color={Colors.text} />
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={[styles.addToCartButton, isAdded && styles.goToCartButton]}
-                        onPress={handleAddToCart}
-                        activeOpacity={0.8}
-                    >
-                        {isAdded ? (
-                            <Check size={20} color="#fff" />
-                        ) : (
-                            <ShoppingCart size={20} color="#fff" />
-                        )}
-                        <Text style={styles.addToCartText}>
-                            {isAdded ? "Go to Cart" : "Add to Cart"}
-                        </Text>
-                    </TouchableOpacity>
+                    <Animated.View style={[styles.addToCartWrap, { transform: [{ scale: addPulse }] }]}>
+                        <TouchableOpacity
+                            style={[styles.addToCartButton, isAdded && styles.goToCartButton]}
+                            onPress={handleAddToCart}
+                            activeOpacity={0.85}
+                        >
+                            {isAdded ? (
+                                <Check size={18} color={Colors.text} />
+                            ) : (
+                                <ShoppingCart size={18} color={Colors.darkText} />
+                            )}
+                            <Text style={[styles.addToCartText, isAdded && styles.goToCartText]}>
+                                {isAdded ? "Go to Cart" : "Add to Cart"}
+                            </Text>
+                        </TouchableOpacity>
+                    </Animated.View>
                 </View>
             </View>
+
+            {/* Write a Review — bottom sheet */}
+            <Modal
+                visible={reviewSheetOpen}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setReviewSheetOpen(false)}
+            >
+                <Pressable style={styles.sheetScrim} onPress={() => setReviewSheetOpen(false)} />
+                <View style={styles.reviewSheet}>
+                    <View style={styles.sheetHandle} />
+                    <Text style={styles.sheetTitle}>Write a Review</Text>
+                    <View style={styles.starsRow}>
+                        {[1, 2, 3, 4, 5].map((s) => (
+                            <TouchableOpacity key={s} onPress={() => setNewReview({ ...newReview, rating: s })}>
+                                <Star
+                                    size={30}
+                                    fill={s <= newReview.rating ? Colors.primary : 'transparent'}
+                                    stroke={s <= newReview.rating ? Colors.primary : Colors.borderStrong}
+                                />
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                    <TextInput
+                        style={styles.reviewInput}
+                        placeholder="Share your experience with this piece…"
+                        placeholderTextColor={Colors.textLight}
+                        multiline
+                        value={newReview.comment}
+                        onChangeText={(text) => setNewReview({ ...newReview, comment: text })}
+                    />
+                    <TouchableOpacity style={styles.submitReviewButton} onPress={handleSubmitReview}>
+                        <Text style={styles.submitReviewText}>Submit Review</Text>
+                    </TouchableOpacity>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -417,278 +506,242 @@ const styles = StyleSheet.create({
     },
     imageContainer: {
         width: width,
-        height: height * 0.55,
-        backgroundColor: '#eee',
+        height: GALLERY_HEIGHT,
+        backgroundColor: Colors.surfaceSunken,
     },
     image: {
         width: width,
         height: '100%',
-        resizeMode: 'cover',
     },
-    paginationContainer: {
+    galleryTapZoneLeft: {
         position: 'absolute',
-        bottom: 0,
+        top: 0,
         left: 0,
+        bottom: 0,
+        width: '50%',
+    },
+    galleryTapZoneRight: {
+        position: 'absolute',
+        top: 0,
         right: 0,
-        height: 80,
+        bottom: 0,
+        width: '50%',
+    },
+    glassButton: {
+        position: 'absolute',
+        top: 56,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        overflow: 'hidden',
+    },
+    glassButtonTouch: {
+        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    backButtonFloating: {
+        left: 20,
+    },
+    wishlistButtonFloating: {
+        right: 20,
     },
     pagination: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 14,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10,
+        gap: 6,
     },
     paginationDot: {
-        height: 10,
-        borderRadius: 4,
-        backgroundColor: 'rgba(255, 255, 255, 0.5)',
+        height: 6,
+        borderRadius: 3,
     },
     paginationDotActive: {
-        width: 20,
-        backgroundColor: '#fff',
+        width: 18,
+        backgroundColor: Colors.text,
     },
     paginationDotInactive: {
-        width: 8,
+        width: 6,
+        backgroundColor: 'rgba(28,24,21,0.25)',
     },
     content: {
-        padding: 16,
+        padding: 20,
         backgroundColor: Colors.background,
-        borderTopLeftRadius: 10,
-        borderTopRightRadius: 10,
-        marginTop: -20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 5,
-    },
-    headerRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 12,
     },
     title: {
-        fontSize: 24,
-        fontWeight: '700',
+        fontFamily: Fonts.serifSemiBold,
+        fontSize: 25,
+        lineHeight: 30,
         color: Colors.text,
-        flex: 1,
-        marginRight: 10,
     },
-    ratingContainer: {
+    ratingRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        backgroundColor: '#fff',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
+        gap: 8,
+        marginTop: 8,
     },
-    ratingText: {
-        fontSize: 14,
-        fontWeight: '600',
+    ratingNum: {
+        fontFamily: Fonts.sansSemiBold,
+        fontSize: 13,
         color: Colors.text,
+    },
+    ratingCount: {
+        fontFamily: Fonts.sansRegular,
+        fontSize: 13,
+        color: Colors.textLight,
     },
     priceRow: {
         flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 16,
-        gap: 12,
+        alignItems: 'baseline',
+        gap: 8,
+        marginTop: 10,
     },
     price: {
-        fontSize: 24,
-        fontWeight: '600',
+        fontFamily: Fonts.sansBold,
+        fontSize: 20,
         color: Colors.text,
     },
     oldPrice: {
-        fontSize: 18,
+        fontFamily: Fonts.sansRegular,
+        fontSize: 15,
         color: Colors.textLight,
         textDecorationLine: 'line-through',
     },
     description: {
-        fontSize: 16,
+        fontFamily: Fonts.sansRegular,
+        fontSize: 14,
+        lineHeight: 22,
         color: Colors.textSecondary,
-        lineHeight: 24,
-        marginBottom: 24,
+        marginTop: 14,
     },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '600',
+    selectorGroup: {
+        marginTop: 22,
+    },
+    sectionLabel: {
+        fontFamily: Fonts.sansSemiBold,
+        fontSize: 13,
         color: Colors.text,
-        marginBottom: 12,
     },
-    selectorRow: {
+    sectionLabelValue: {
+        color: Colors.secondary,
+    },
+    colorRow: {
         flexDirection: 'row',
         gap: 12,
-        marginBottom: 24,
+        marginTop: 10,
     },
-    colorOption: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: '#eee',
-    },
-    colorSelected: {
+    colorRing: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         borderWidth: 2,
+        borderColor: 'transparent',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    colorRingSelected: {
         borderColor: Colors.text,
     },
+    colorSwatch: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: 'rgba(28,24,21,0.1)',
+    },
+    sizeRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 10,
+        flexWrap: 'wrap',
+    },
     sizeOption: {
-        width: 44,
-        height: 44,
-        borderRadius: 10,
+        height: 40,
+        paddingHorizontal: 18,
+        borderRadius: 20,
+        borderWidth: 1.5,
+        borderColor: Colors.borderStrong,
         backgroundColor: Colors.surface,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: Colors.border,
     },
     sizeSelected: {
         backgroundColor: Colors.text,
         borderColor: Colors.text,
     },
     sizeText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.textSecondary,
+        fontFamily: Fonts.sansBold,
+        fontSize: 13,
+        color: Colors.text,
     },
     sizeTextSelected: {
-        color: '#fff',
+        color: Colors.darkText,
     },
-    pointsInfo: {
-        backgroundColor: '#FEF4F4',
-        padding: 12,
-        borderRadius: 12,
-        marginBottom: 20,
+    sectionHeading: {
+        fontFamily: Fonts.serifSemiBold,
+        fontSize: 18,
+        color: Colors.text,
     },
-    pointsText: {
-        color: Colors.secondary,
-        fontWeight: '600',
-        textAlign: 'center',
+    sectionSubheading: {
+        fontFamily: Fonts.sansRegular,
+        fontSize: 12,
+        color: Colors.textSecondary,
+        marginTop: 2,
     },
     similarSection: {
-        marginTop: 20,
-        marginBottom: 40,
-        paddingHorizontal: 2,
-    },
-    sectionTitleContainer: {
-        marginBottom: 16,
-        paddingHorizontal: 2,
+        marginTop: 32,
     },
     gridContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'space-between',
+        marginTop: 14,
     },
     similarCard: {
         width: '48%',
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        marginBottom: 15,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 3,
-        overflow: 'hidden',
+        marginBottom: 16,
     },
     similarImage: {
         width: '100%',
-        height: 200,
-        resizeMode: 'cover',
-    },
-    similarInfoContainer: {
-        padding: 12,
-    },
-    similarInfo: {
-        marginBottom: 6,
+        aspectRatio: 1 / 1.15,
+        borderRadius: 12,
+        backgroundColor: Colors.surfaceSunken,
     },
     similarTitle: {
-        fontSize: 14,
-        fontWeight: '600',
+        fontFamily: Fonts.sansMedium,
+        fontSize: 13,
         color: Colors.text,
-        marginBottom: 4,
-        lineHeight: 20,
+        marginTop: 8,
     },
     similarPrice: {
-        fontSize: 16,
-        fontWeight: '700',
+        fontFamily: Fonts.sansBold,
+        fontSize: 13,
         color: Colors.text,
-    },
-    shopNowButton: {
-        marginTop: 10,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    shopNowText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-    },
-    ratingRow: {
-        flexDirection: 'row',
-        marginBottom: 8,
+        marginTop: 2,
     },
     reviewsSection: {
-        marginTop: 24,
-        paddingTop: 24,
-        borderTopWidth: 1,
-        borderTopColor: '#f0f0f0',
+        marginTop: 32,
     },
     sectionHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'baseline',
         marginBottom: 16,
     },
     writeReviewText: {
-        color: Colors.primary,
-        fontWeight: '600',
-    },
-    reviewForm: {
-        backgroundColor: '#f9f9f9',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 20,
-    },
-    formLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        marginBottom: 8,
-    },
-    starsRow: {
-        flexDirection: 'row',
-        gap: 8,
-        marginBottom: 16,
-    },
-    reviewInput: {
-        backgroundColor: '#fff',
-        borderRadius: 8,
-        padding: 12,
-        height: 80,
-        textAlignVertical: 'top',
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: '#eee',
-    },
-    submitReviewButton: {
-        backgroundColor: Colors.text,
-        padding: 12,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    submitReviewText: {
-        color: '#fff',
-        fontWeight: '600',
+        fontFamily: Fonts.sansBold,
+        fontSize: 12,
+        color: Colors.secondary,
     },
     reviewCard: {
         marginBottom: 16,
         paddingBottom: 16,
         borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
+        borderBottomColor: Colors.border,
     },
     reviewHeader: {
         flexDirection: 'row',
@@ -696,69 +749,130 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     reviewerName: {
-        fontWeight: '600',
+        fontFamily: Fonts.sansSemiBold,
+        fontSize: 13,
         color: Colors.text,
     },
     reviewDate: {
-        fontSize: 12,
+        fontFamily: Fonts.sansRegular,
+        fontSize: 11,
         color: Colors.textLight,
     },
-    starRowSmall: {
-        flexDirection: 'row',
-        gap: 2,
-        marginBottom: 8,
-    },
     reviewComment: {
-        color: Colors.textSecondary,
+        fontFamily: Fonts.sansRegular,
+        fontSize: 13,
         lineHeight: 20,
+        color: Colors.textSecondary,
+        marginTop: 6,
     },
     bottomBar: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: Colors.surface,
+        backgroundColor: 'rgba(255,255,255,0.94)',
         paddingHorizontal: 20,
-        paddingTop: 16,
-        paddingBottom: 20,
+        paddingTop: 14,
+        paddingBottom: 34,
         borderTopWidth: 1,
-        borderTopColor: '#f0f0f0',
+        borderTopColor: Colors.border,
     },
     buttonsRow: {
         flexDirection: 'row',
-        gap: 12,
+        gap: 10,
     },
     tryOnButton: {
         flex: 1,
-        backgroundColor: Colors.secondary,
-        paddingVertical: 16,
-        borderRadius: 30,
-        flexDirection: 'row',
+        height: 52,
+        borderRadius: 26,
+        borderWidth: 1.5,
+        borderColor: Colors.text,
+        backgroundColor: 'transparent',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: 8,
     },
     tryOnButtonText: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 14,
         color: Colors.text,
-        fontWeight: '700',
-        fontSize: 16,
+    },
+    addToCartWrap: {
+        flex: 1.3,
     },
     addToCartButton: {
-        flex: 1,
+        height: 52,
+        borderRadius: 26,
         backgroundColor: Colors.text,
-        paddingVertical: 16,
-        borderRadius: 30,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
         gap: 8,
     },
     addToCartText: {
-        color: '#fff',
-        fontWeight: '700',
-        fontSize: 16,
+        fontFamily: Fonts.sansBold,
+        fontSize: 14,
+        color: Colors.darkText,
     },
     goToCartButton: {
-        backgroundColor: Colors.success, // Or keep same color, or use a specific success color
-    }
+        backgroundColor: Colors.surfaceSunken,
+    },
+    goToCartText: {
+        color: Colors.text,
+    },
+    // ─── Review Sheet ─────────────────────────────────────
+    sheetScrim: {
+        flex: 1,
+        backgroundColor: 'rgba(28,24,21,0.45)',
+    },
+    reviewSheet: {
+        backgroundColor: Colors.surface,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingHorizontal: 20,
+        paddingTop: 12,
+        paddingBottom: 34,
+    },
+    sheetHandle: {
+        width: 36,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: Colors.borderStrong,
+        alignSelf: 'center',
+        marginBottom: 16,
+    },
+    sheetTitle: {
+        fontFamily: Fonts.serifSemiBold,
+        fontSize: 18,
+        color: Colors.text,
+    },
+    starsRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginVertical: 16,
+    },
+    reviewInput: {
+        backgroundColor: Colors.surface,
+        borderRadius: 12,
+        padding: 12,
+        height: 90,
+        textAlignVertical: 'top',
+        borderWidth: 1.5,
+        borderColor: Colors.borderStrong,
+        fontFamily: Fonts.sansRegular,
+        fontSize: 14,
+        color: Colors.text,
+    },
+    submitReviewButton: {
+        backgroundColor: Colors.text,
+        height: 50,
+        borderRadius: 25,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 14,
+    },
+    submitReviewText: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 14,
+        color: Colors.darkText,
+    },
 });

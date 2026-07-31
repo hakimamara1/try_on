@@ -10,9 +10,11 @@ const fs = require('fs');
 // @access    Private
 exports.generateTryOn = async (req, res, next) => {
     try {
+        req.log.debug({ userId: req.user.id }, 'Attempting to generate try-on');
         // Check for sufficient points first
         const userCheck = await User.findById(req.user.id);
         if (userCheck.points_balance < 20) {
+            req.log.warn({ userId: req.user.id, points: userCheck.points_balance }, 'Insufficient points for try-on');
             return res.status(400).json({ success: false, error: 'Insufficient points. You need 20 points.' });
         }
 
@@ -62,7 +64,7 @@ exports.generateTryOn = async (req, res, next) => {
         // Model: google/nano-banana
         // Input format: { prompt, image_input: [userImage, productUrl] }
 
-        console.log('Generating Try-On with params:', { userImageUrl, clothImageUrl });
+        req.log.debug({ userImageUrl, clothImageUrl }, 'Calling Replicate API for Try-On');
 
 
         const prompt = `You are a computer vision and image synthesis system specialized in virtual fashion try-on.
@@ -97,7 +99,7 @@ TASKS:
             }
         );
 
-        console.log('Replicate Output Type:', typeof output);
+        req.log.debug({ outputType: typeof output }, 'Replicate Output Type');
 
         let generatedImage = null;
         if (typeof output === 'string') {
@@ -120,13 +122,13 @@ TASKS:
             generatedImage = generatedImage.href;
         }
 
-        console.log('Final Generated Image URL:', generatedImage);
+        req.log.info({ generatedImage }, 'Final Generated Image URL');
 
         // Fallback for demo if API fails to give a valid string immediately (sometimes it takes time or is async)
         if (!generatedImage) {
             // If output is null but no error thrown, it might be a weird response format. 
             // We'll just return what we have or a placeholder if strict mode isn't on.
-            console.warn('Unexpected output format from Replicate', output);
+            req.log.warn({ output }, 'Unexpected output format from Replicate');
         }
 
         // Award Points for Try-On (Engagement) - Limit 5 per day? For MVP, just award.
@@ -152,9 +154,20 @@ TASKS:
         });
 
     } catch (err) {
+        // Clean up any temp uploads that didn't make it to Cloudinary before the error
+        if (req.files) {
+            for (const fieldFiles of Object.values(req.files)) {
+                for (const file of fieldFiles) {
+                    if (file.path && fs.existsSync(file.path)) {
+                        fs.unlinkSync(file.path);
+                    }
+                }
+            }
+        }
+
         // If Replicate fails (e.g. no token), handle gracefully for MVP
-        console.error("Replicate/Try-On Error:", err);
-        if (err.response) console.error("Replicate Response:", err.response.data);
+        req.log.error({ err }, "Replicate/Try-On Error");
+        if (err.response) req.log.error({ responseData: err.response.data }, "Replicate Response Error");
 
         if (err.message && err.message.includes('REPLICATE_API_TOKEN')) {
             return res.status(503).json({ success: false, error: 'AI Service Config Missing' });
@@ -186,7 +199,7 @@ exports.saveLook = async (req, res, next) => {
             });
             savedImageUrl = uploadResult.secure_url;
         } catch (uploadError) {
-            console.error('Cloudinary upload failed for saved look:', uploadError);
+            req.log.error({ err: uploadError }, 'Cloudinary upload failed for saved look');
             return res.status(500).json({ success: false, error: 'Failed to save image to storage' });
         }
 

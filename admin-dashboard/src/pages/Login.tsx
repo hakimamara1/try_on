@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import { setToken } from '../api/authToken';
 
 const Login = () => {
     const [email, setEmail] = useState('');
@@ -24,7 +25,7 @@ const Login = () => {
                 return;
             }
 
-            localStorage.setItem('token', token);
+            await setToken(token);
             localStorage.setItem('user', JSON.stringify(user));
             navigate('/');
         } catch (err: any) {

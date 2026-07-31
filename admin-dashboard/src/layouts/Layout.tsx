@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Package, ShoppingCart, Users, Settings, LogOut, Layers } from 'lucide-react';
+import { clearToken } from '../api/authToken';
 
 const SidebarItem = ({ icon: Icon, label, path }: { icon: any, label: string, path: string }) => {
     const location = useLocation();
@@ -21,8 +22,8 @@ const SidebarItem = ({ icon: Icon, label, path }: { icon: any, label: string, pa
 const Layout = ({ children }: { children: ReactNode }) => {
     const navigate = useNavigate();
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
+    const handleLogout = async () => {
+        await clearToken();
         localStorage.removeItem('user');
         navigate('/login');
     };

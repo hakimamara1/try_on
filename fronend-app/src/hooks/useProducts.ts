@@ -1,10 +1,14 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { getProducts, getCategories } from '../api/products';
+import { ProductQueryParams } from '../types';
 
-export const useProducts = () => {
+export const useProducts = (params?: ProductQueryParams) => {
     return useQuery({
-        queryKey: ['products'],
-        queryFn: getProducts,
+        queryKey: ['products', params],
+        queryFn: () => getProducts(params),
+        // Keep showing the previous result set while a new filter/sort/search
+        // is in flight, instead of flashing a full skeleton grid every time.
+        placeholderData: keepPreviousData,
     });
 };
 

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, Dimensions, Modal, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Dimensions, Modal, ActivityIndicator, Alert } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Trash2, Share2, Download, X, Maximize2 } from 'lucide-react-native';
+import { ChevronLeft, Trash2, Share2, Download, X, Shirt } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Colors } from '../constants/Styles';
+import { Colors, Fonts } from '../constants/Styles';
 import { useSavedTryOn } from '../context/SavedTryOnContext';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
@@ -11,8 +12,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 const { width, height } = Dimensions.get('window');
 const COLUMN_COUNT = 2;
-const SPACING = 16;
-const ITEM_WIDTH = (width - (SPACING * (COLUMN_COUNT + 1))) / COLUMN_COUNT;
+const SPACING = 20;
+const GAP = 14;
+const ITEM_WIDTH = (width - SPACING * 2 - GAP) / COLUMN_COUNT;
 
 export default function SavedTryOnScreen() {
     const navigation = useNavigation();
@@ -96,14 +98,10 @@ export default function SavedTryOnScreen() {
             activeOpacity={0.9}
             onPress={() => setSelectedImage(item)}
         >
-            <Image source={{ uri: item.image }} style={styles.image} resizeMode="cover" />
-            <View style={styles.cardOverlay}>
-                <View style={styles.dateBadge}>
-                    <Text style={styles.dateText}>
-                        {new Date(item.createdAt || Date.now()).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    </Text>
-                </View>
-            </View>
+            <Image source={{ uri: item.image }} style={styles.image} contentFit="cover" />
+            <Text style={styles.dateText}>
+                {new Date(item.createdAt || Date.now()).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            </Text>
         </TouchableOpacity>
     );
 
@@ -111,20 +109,21 @@ export default function SavedTryOnScreen() {
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <ArrowLeft size={24} color={Colors.text} />
+                    <ChevronLeft size={20} color={Colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.title}>My Collection</Text>
-                <View style={{ width: 40 }} />
+                <Text style={styles.title}>My Looks</Text>
             </View>
 
             {savedItems.length === 0 ? (
                 <View style={styles.emptyContainer}>
-                    <Image
-                        source={{ uri: 'https://cdn-icons-png.flaticon.com/512/743/743224.png' }}
-                        style={{ width: 80, height: 80, marginBottom: 20, opacity: 0.5 }}
-                    />
-                    <Text style={styles.emptyText}>Empty Gallery</Text>
-                    <Text style={styles.emptySubtext}>Your generated looks will be saved here.</Text>
+                    <View style={styles.emptyIconCircle}>
+                        <Shirt size={20} color={Colors.primaryDark} />
+                    </View>
+                    <Text style={styles.emptyText}>No looks saved yet</Text>
+                    <Text style={styles.emptySubtext}>Try something on and save your favorite fits here.</Text>
+                    <TouchableOpacity style={styles.emptyCta} onPress={() => navigation.navigate('TryOn' as never)}>
+                        <Text style={styles.emptyCtaText}>Try It On Me</Text>
+                    </TouchableOpacity>
                 </View>
             ) : (
                 <FlatList
@@ -152,7 +151,7 @@ export default function SavedTryOnScreen() {
                                 onPress={() => setSelectedImage(null)}
                                 style={styles.closeButton}
                             >
-                                <X size={24} color="#fff" />
+                                <X size={22} color={Colors.darkText} />
                             </TouchableOpacity>
                         </View>
 
@@ -161,7 +160,7 @@ export default function SavedTryOnScreen() {
                                 <Image
                                     source={{ uri: selectedImage.image }}
                                     style={styles.modalImage}
-                                    resizeMode="contain"
+                                    contentFit="contain"
                                 />
                             )}
                         </View>
@@ -171,7 +170,7 @@ export default function SavedTryOnScreen() {
                                 style={styles.actionButton}
                                 onPress={() => selectedImage && handleShare(selectedImage.image)}
                             >
-                                <Share2 size={24} color="#fff" />
+                                <Share2 size={22} color={Colors.darkText} />
                                 <Text style={styles.actionText}>Share</Text>
                             </TouchableOpacity>
 
@@ -180,21 +179,21 @@ export default function SavedTryOnScreen() {
                                 onPress={() => selectedImage && handleSave(selectedImage.image)}
                             >
                                 {downloading ? (
-                                    <ActivityIndicator color="#000" />
+                                    <ActivityIndicator color={Colors.text} />
                                 ) : (
                                     <>
-                                        <Download size={24} color="#000" />
-                                        <Text style={[styles.actionText, { color: '#000' }]}>Save</Text>
+                                        <Download size={20} color={Colors.text} />
+                                        <Text style={[styles.actionText, { color: Colors.text }]}>Save</Text>
                                     </>
                                 )}
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                style={[styles.actionButton, styles.deleteAction]}
+                                style={styles.actionButton}
                                 onPress={() => selectedImage && handleDelete(selectedImage.id)}
                             >
-                                <Trash2 size={24} color={Colors.error} />
-                                <Text style={[styles.actionText, { color: Colors.error }]}>Delete</Text>
+                                <Trash2 size={22} color="#E5695F" />
+                                <Text style={[styles.actionText, { color: '#E5695F' }]}>Delete</Text>
                             </TouchableOpacity>
                         </View>
                     </SafeAreaView>
@@ -212,88 +211,91 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        gap: 14,
         paddingHorizontal: 20,
-        paddingVertical: 16,
+        paddingVertical: 14,
     },
     backButton: {
-        padding: 8,
-        marginLeft: -8,
-        borderRadius: 20,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         backgroundColor: Colors.surface,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     title: {
+        fontFamily: Fonts.serifSemiBold,
         fontSize: 20,
-        fontWeight: '700',
         color: Colors.text,
-        letterSpacing: 0.5,
     },
     listContainer: {
-        padding: SPACING,
+        paddingHorizontal: SPACING,
+        paddingBottom: SPACING,
     },
     columnWrapper: {
         justifyContent: 'space-between',
-        marginBottom: SPACING,
+        marginBottom: GAP,
     },
     card: {
         width: ITEM_WIDTH,
-        height: ITEM_WIDTH * 1.5,
-        borderRadius: 20,
-        overflow: 'hidden',
-        position: 'relative',
-        backgroundColor: '#f0f0f0',
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
     },
     image: {
         width: '100%',
-        height: '100%',
-    },
-    cardOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        justifyContent: 'space-between',
-        padding: 10,
-    },
-    dateBadge: {
-        alignSelf: 'flex-start',
-        backgroundColor: 'rgba(0,0,0,0.4)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-        // backdropFilter: 'blur(10px)', // Not supported in React Native natively
+        height: ITEM_WIDTH * 1.33,
+        borderRadius: 14,
+        backgroundColor: Colors.surfaceSunken,
     },
     dateText: {
-        color: '#fff',
-        fontSize: 10,
-        fontWeight: '600',
+        fontFamily: Fonts.sansRegular,
+        fontSize: 12,
+        color: Colors.textLight,
+        marginTop: 8,
     },
     emptyContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
         paddingBottom: 100,
+        paddingHorizontal: 40,
+        gap: 12,
+    },
+    emptyIconCircle: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: Colors.surfaceSunken,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     emptyText: {
-        fontSize: 20,
-        fontWeight: '700',
+        fontFamily: Fonts.serifSemiBold,
+        fontSize: 18,
         color: Colors.text,
-        marginBottom: 8,
     },
     emptySubtext: {
-        fontSize: 14,
+        fontFamily: Fonts.sansRegular,
+        fontSize: 13,
         color: Colors.textLight,
+        textAlign: 'center',
+    },
+    emptyCta: {
+        backgroundColor: Colors.text,
+        paddingHorizontal: 22,
+        paddingVertical: 13,
+        borderRadius: 23,
+        marginTop: 4,
+    },
+    emptyCtaText: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 13,
+        color: Colors.darkText,
     },
     // Modal Styles
     modalContainer: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.95)',
+        backgroundColor: 'rgba(14,13,12,0.96)',
         justifyContent: 'center',
     },
     modalSafeArea: {
@@ -307,7 +309,7 @@ const styles = StyleSheet.create({
     },
     closeButton: {
         padding: 10,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: 'rgba(247,243,236,0.12)',
         borderRadius: 30,
     },
     modalImageContainer: {
@@ -332,7 +334,7 @@ const styles = StyleSheet.create({
         minWidth: 70,
     },
     saveButton: {
-        backgroundColor: '#fff',
+        backgroundColor: Colors.darkText,
         paddingHorizontal: 24,
         paddingVertical: 12,
         borderRadius: 30,
@@ -340,12 +342,9 @@ const styles = StyleSheet.create({
         minWidth: 120,
         justifyContent: 'center',
     },
-    deleteAction: {
-        opacity: 0.9,
-    },
     actionText: {
-        color: '#fff',
+        fontFamily: Fonts.sansBold,
+        color: Colors.darkText,
         fontSize: 12,
-        fontWeight: '600',
     }
 });

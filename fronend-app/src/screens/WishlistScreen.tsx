@@ -1,20 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ActivityIndicator, Dimensions, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Dimensions, RefreshControl } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { ArrowLeft, Trash2, ShoppingBag, Heart } from 'lucide-react-native';
-import { Colors } from '../constants/Styles';
+import { Heart } from 'lucide-react-native';
+import { Colors, Fonts } from '../constants/Styles';
 import { getMe, toggleWishlist } from '../api/auth';
-import { useCart } from '../context/CartContext';
 
 const { width } = Dimensions.get('window');
-const COLUMN_WIDTH = width / 2 - 24;
+const COLUMN_WIDTH = (width - 54) / 2;
 
 export default function WishlistScreen() {
     const navigation = useNavigation<any>();
-    const { addToCart } = useCart();
+
     const queryClient = useQueryClient();
+
 
     const { data: user, isLoading, refetch, isRefetching } = useQuery({
         queryKey: ['user', 'me'],
@@ -64,7 +65,7 @@ export default function WishlistScreen() {
             activeOpacity={0.9}
         >
             <View style={styles.imageContainer}>
-                <Image source={{ uri: item.image }} style={styles.image} />
+                <Image source={{ uri: item.image }} style={styles.image} contentFit="cover" />
                 <TouchableOpacity
                     style={styles.removeButton}
                     onPress={(e) => {
@@ -72,23 +73,11 @@ export default function WishlistScreen() {
                         handleRemoveFromWishlist(item._id);
                     }}
                 >
-                    <Trash2 size={18} color={Colors.error} />
+                    <Heart size={13} fill={Colors.secondary} color={Colors.secondary} />
                 </TouchableOpacity>
             </View>
-            <View style={styles.contentContainer}>
-                <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.productPrice}>DA{item.price}</Text>
-
-                <TouchableOpacity
-                    style={styles.addToCartButton}
-                    onPress={(e) => {
-                        e.stopPropagation(); // Prevent navigation
-                        navigation.navigate('ProductDetails', { product: item });
-                    }}
-                >
-                    <Text style={styles.addToCartText}>View Details</Text>
-                </TouchableOpacity>
-            </View>
+            <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
+            <Text style={styles.productPrice}>${item.price}</Text>
         </TouchableOpacity>
     );
 
@@ -103,26 +92,22 @@ export default function WishlistScreen() {
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <ArrowLeft size={24} color={Colors.text} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>My Wishlist</Text>
-                <View style={{ width: 40 }} />
+                <Text style={styles.headerTitle}>Wishlist</Text>
             </View>
 
             {wishlist.length === 0 ? (
                 <View style={styles.emptyState}>
-                    <View style={styles.emptyIconContainer}>
-                        <Heart size={64} color={Colors.textLight} fill="#F0F0F0" />
-                    </View>
+                    {isRefetching && <ActivityIndicator size="large" color={Colors.primary} />}
+                    <Heart size={40} color={Colors.borderStrong} />
                     <Text style={styles.emptyTitle}>Your wishlist is empty</Text>
-                    <Text style={styles.emptyText}>Save items you love here to check them out later!</Text>
+                    <Text style={styles.emptyText}>Tap the heart on any piece to save it here.</Text>
                     <TouchableOpacity
                         style={styles.startShoppingButton}
                         onPress={() => navigation.navigate('Shop')}
                     >
-                        <Text style={styles.startShoppingText}>Start Shopping</Text>
+                        <Text style={styles.startShoppingText}>Browse Products</Text>
                     </TouchableOpacity>
+
                 </View>
             ) : (
                 <FlatList
@@ -154,89 +139,60 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.background,
     },
     header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
         paddingHorizontal: 20,
-        paddingVertical: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F0F0F0',
-    },
-    backButton: {
-        padding: 8,
-        marginLeft: -8,
+        paddingVertical: 14,
     },
     headerTitle: {
-        fontSize: 18,
-        fontWeight: '600',
+        fontFamily: Fonts.serifSemiBold,
+        fontSize: 20,
         color: Colors.text,
     },
     listContainer: {
-        padding: 16,
+        paddingHorizontal: 20,
+        paddingTop: 4,
+        paddingBottom: 40,
     },
     columnWrapper: {
         justifyContent: 'space-between',
     },
     card: {
         width: COLUMN_WIDTH,
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        marginBottom: 16,
-        shadowColor: Colors.shadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 10,
-        elevation: 2,
-        overflow: 'hidden',
+        marginBottom: 18,
     },
     imageContainer: {
         position: 'relative',
-        height: 200,
         width: '100%',
+        aspectRatio: 1 / 1.15,
+        borderRadius: 14,
+        overflow: 'hidden',
+        backgroundColor: Colors.surfaceSunken,
     },
     image: {
         width: '100%',
         height: '100%',
-        resizeMode: 'cover',
     },
     removeButton: {
         position: 'absolute',
         top: 8,
         right: 8,
-        backgroundColor: '#fff',
-        padding: 8,
-        borderRadius: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    contentContainer: {
-        padding: 12,
-    },
-    productName: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.text,
-        marginBottom: 4,
-    },
-    productPrice: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.primary,
-        marginBottom: 10,
-    },
-    addToCartButton: {
-        backgroundColor: Colors.text,
-        paddingVertical: 8,
-        borderRadius: 8,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: 'rgba(255,255,255,0.85)',
+        justifyContent: 'center',
         alignItems: 'center',
     },
-    addToCartText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: '600',
+    productName: {
+        fontFamily: Fonts.sansMedium,
+        fontSize: 13,
+        color: Colors.text,
+        marginTop: 8,
+    },
+    productPrice: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 13,
+        color: Colors.text,
+        marginTop: 2,
     },
     emptyState: {
         flex: 1,
@@ -244,32 +200,29 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 40,
         marginTop: -40,
-    },
-    emptyIconContainer: {
-        marginBottom: 24,
+        gap: 14,
     },
     emptyTitle: {
-        fontSize: 20,
-        fontWeight: '700',
+        fontFamily: Fonts.serifSemiBold,
+        fontSize: 18,
         color: Colors.text,
-        marginBottom: 8,
     },
     emptyText: {
-        fontSize: 16,
-        color: Colors.textSecondary,
+        fontFamily: Fonts.sansRegular,
+        fontSize: 14,
+        color: Colors.textLight,
         textAlign: 'center',
-        lineHeight: 24,
-        marginBottom: 30,
     },
     startShoppingButton: {
-        backgroundColor: Colors.primary,
-        paddingHorizontal: 32,
+        backgroundColor: Colors.text,
+        paddingHorizontal: 24,
         paddingVertical: 14,
-        borderRadius: 30,
+        borderRadius: 23,
+        marginTop: 6,
     },
     startShoppingText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
+        fontFamily: Fonts.sansBold,
+        color: Colors.darkText,
+        fontSize: 13,
     }
 });
